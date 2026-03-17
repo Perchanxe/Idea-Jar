@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Idea Jar</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <img id="closeButton" src="Sprites/exit.png" draggable="false">
+
+    <div class="jarContainer">
+        <img id="pickButton" src="Sprites/jar.png" draggable="false">
+
+        <button id="createIdeaButton">Create Idea</button>
+
+        <div id="taskPanel" class="hidden">
+            <div class="tabs">
+                <button id="tasksTab" class="tabButton activeTab">Tasks</button>
+                <button id="completedTab" class="tabButton">Completed</button>
+            </div>
+
+            <h2 id="taskPanelTitle"></h2>
+            <div id="taskList"></div>
+
+            <div class="panelActions">
+                <button id="randomTaskButton">Random Task</button>
+                <button id="createTaskButton">Create Task</button>
+            </div>
+        </div>
+
+        <div id="subtaskPanel" class="hidden">
+            <div class="tabs">
+                <button id="subtasksTasksTab" class="tabButton activeTab">Tasks</button>
+                <button id="subtasksCompletedTab" class="tabButton">Completed</button>
+            </div>
+
+            <button id="backButton">← Back</button>
+            <h2 id="subtaskPanelTitle"></h2>
+            <div id="subtaskList"></div>
+
+            <div class="panelActions">
+                <button id="randomSubtaskButton">Random Subtask</button>
+            </div>
+        </div>
+
+        <div id="completedPanel" class="hidden">
+            <div class="tabs">
+                <button id="completedTasksTab" class="tabButton">Tasks</button>
+                <button id="completedTabHeader" class="tabButton activeTab">Completed</button>
+            </div>
+
+            <button id="completedBackButton">← Back</button>
+            <h2 id="completedPanelTitle">Completed</h2>
+            <div id="completedCount"></div>
+            <div id="completedList"></div>
+        </div>
+
+        <div id="messagePopup" class="hidden">
+            <p id="messageText"></p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
