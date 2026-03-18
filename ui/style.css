@@ -32,12 +32,10 @@ body {
 .jarContainer {
     position: relative;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
     align-items: center;
-    min-width: 180px;
-    min-height: 180px;
-    width: auto;
-    height: auto;
+    justify-content: center;
+    gap: 6px;
 }
 
 
@@ -69,20 +67,23 @@ body {
 
 #closeButton {
     position: absolute;
-    top: 6px;
-    right: 6px;
-    z-index: 50;
+    top: 8px;
+    right: 8px;
+    z-index: 100;
+
     width: 16px;
     height: 16px;
     padding: 0;
     border: none;
     outline: none;
     cursor: pointer;
+
     background-color: transparent;
     background-image: url("Sprites/exit.png");
     background-repeat: no-repeat;
     background-position: 0 0;
     background-size: 16px 48px;
+
     image-rendering: pixelated;
 }
 
@@ -100,11 +101,11 @@ body {
 ========================= */
 
 #createIdeaButton {
-    position: absolute;
-    left: 50%;
-    bottom: -34px;
+    position: static;
     z-index: 20;
-    transform: translateX(-50%);
+
+    margin-top: -6px; /* 👈 overlap amount (adjust this) */
+
     padding: 6px 12px;
     border: none;
     border-radius: 8px;
@@ -136,7 +137,6 @@ body {
     border-radius: 12px;
     color: white;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-
     background-image: url("Sprites/BG.png");
     background-repeat: no-repeat;
     background-position: center;
@@ -224,12 +224,36 @@ body {
 .taskRow {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 8px;
+}
+
+.checkbox {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    background-color: transparent;
+    background-image: url("Sprites/checkboxImage.png");
+    background-repeat: no-repeat;
+    background-position: 0 0;
+    background-size: 16px 48px;
+    image-rendering: pixelated;
+}
+
+.checkbox.checked {
+    background-position: 0 -32px;
+}
+
+.checkbox:not(.checked):hover {
+    background-position: 0 -16px;
 }
 
 .taskButton {
     flex: 1;
+    min-width: 0;
     padding: 4px 0;
     border: none;
     border-radius: 6px;
@@ -246,16 +270,28 @@ body {
 
 .deleteButton {
     flex-shrink: 0;
-    padding: 0 6px;
+    width: 16px;
+    height: 16px;
+    padding: 0;
     border: none;
-    background: transparent;
-    color: #ff6666;
-    font-size: 16px;
+    outline: none;
     cursor: pointer;
+
+    background-color: transparent;
+    background-image: url("Sprites/xImage.png");
+    background-repeat: no-repeat;
+    background-position: 0 0;
+    background-size: 16px 48px;
+
+    image-rendering: pixelated;
 }
 
 .deleteButton:hover {
-    color: #ff3333;
+    background-position: 0 -16px;
+}
+
+.deleteButton:active {
+    background-position: 0 -32px;
 }
 
 .highlighted {

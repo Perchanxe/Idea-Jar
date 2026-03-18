@@ -62,6 +62,27 @@ function showJarMode() {
     }, 10);
 }
 
+function createCheckbox(isChecked = false, ariaLabel = "Checkbox") {
+    const checkbox = document.createElement("button");
+    checkbox.className = "checkbox";
+    checkbox.type = "button";
+    checkbox.setAttribute("aria-label", ariaLabel);
+
+    if (isChecked) {
+        checkbox.classList.add("checked");
+    }
+
+    return checkbox;
+}
+
+function createDeleteButton(ariaLabel = "Delete") {
+    const deleteButton = document.createElement("button");
+    deleteButton.className = "deleteButton";
+    deleteButton.type = "button";
+    deleteButton.setAttribute("aria-label", ariaLabel);
+    return deleteButton;
+}
+
 function showTaskPanel(state) {
     hideAllPanels();
 
@@ -79,9 +100,21 @@ function showTaskPanel(state) {
         const row = document.createElement("div");
         row.className = "taskRow";
 
+        const checkbox = createCheckbox(task.done, `Open task ${task.name}`);
+
+        if (state.highlightTask && state.highlightTask === task.name) {
+            checkbox.classList.add("highlighted");
+        }
+
+        checkbox.addEventListener("click", async () => {
+            const newState = await window.pywebview.api.open_task(taskIndex);
+            handleState(newState);
+        });
+
         const openButton = document.createElement("button");
         openButton.className = "taskButton";
-        openButton.textContent = task.done ? `✅ ${task.name}` : `⬜ ${task.name}`;
+        openButton.type = "button";
+        openButton.textContent = task.name;
 
         if (state.highlightTask && state.highlightTask === task.name) {
             openButton.classList.add("highlighted");
@@ -92,9 +125,7 @@ function showTaskPanel(state) {
             handleState(newState);
         });
 
-        const deleteButton = document.createElement("button");
-        deleteButton.className = "deleteButton";
-        deleteButton.textContent = "✕";
+        const deleteButton = createDeleteButton(`Delete task ${task.name}`);
 
         deleteButton.addEventListener("click", async () => {
             if (!confirm("Delete this task?")) return;
@@ -102,6 +133,7 @@ function showTaskPanel(state) {
             handleState(newState);
         });
 
+        row.appendChild(checkbox);
         row.appendChild(openButton);
         row.appendChild(deleteButton);
 
@@ -132,9 +164,24 @@ function showSubtaskPanel(state) {
         const row = document.createElement("div");
         row.className = "taskRow";
 
+        const checkbox = createCheckbox(subtask.done, `Toggle subtask ${subtask.name}`);
+
+        if (state.highlightSubtask && state.highlightSubtask === subtask.name) {
+            checkbox.classList.add("highlighted");
+        }
+
+        checkbox.addEventListener("click", async () => {
+            const newState = await window.pywebview.api.toggle_subtask(
+                state.taskIndex,
+                subtaskIndex
+            );
+            handleState(newState);
+        });
+
         const subtaskButton = document.createElement("button");
         subtaskButton.className = "taskButton";
-        subtaskButton.textContent = subtask.done ? `✅ ${subtask.name}` : `⬜ ${subtask.name}`;
+        subtaskButton.type = "button";
+        subtaskButton.textContent = subtask.name;
 
         if (state.highlightSubtask && state.highlightSubtask === subtask.name) {
             subtaskButton.classList.add("highlighted");
@@ -148,9 +195,7 @@ function showSubtaskPanel(state) {
             handleState(newState);
         });
 
-        const deleteButton = document.createElement("button");
-        deleteButton.className = "deleteButton";
-        deleteButton.textContent = "✕";
+        const deleteButton = createDeleteButton(`Delete subtask ${subtask.name}`);
 
         deleteButton.addEventListener("click", async () => {
             if (!confirm("Delete this subtask?")) return;
@@ -161,6 +206,7 @@ function showSubtaskPanel(state) {
             handleState(newState);
         });
 
+        row.appendChild(checkbox);
         row.appendChild(subtaskButton);
         row.appendChild(deleteButton);
 
@@ -183,7 +229,7 @@ function showCompletedPanel(state) {
     completedCount.textContent = `Completed projects: ${state.count}`;
     completedList.innerHTML = "";
 
-    (state.projects || []).forEach(name => {
+    (state.projects || []).forEach((name) => {
         const item = document.createElement("div");
         item.className = "taskItem";
         item.textContent = name;
