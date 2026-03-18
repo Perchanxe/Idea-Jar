@@ -32,10 +32,10 @@ def ensure_app_folders():
 class Api:
     def __init__(self):
         folders = ensure_app_folders()
-        self.base_folder = folders["base_folder"]
-        self.ideas_folder = folders["ideas_folder"]
-        self.in_progress_folder = folders["in_progress_folder"]
-        self.completed_folder = folders["completed_folder"]
+        self._base_folder = folders["base_folder"]
+        self._ideas_folder = folders["ideas_folder"]
+        self._in_progress_folder = folders["in_progress_folder"]
+        self._completed_folder = folders["completed_folder"]
 
     def _safe_name(self, name: str) -> str:
         bad_chars = '<>:"/\\|?*'
@@ -43,7 +43,7 @@ class Api:
         return cleaned or "Untitled"
 
     def _get_in_progress_projects(self):
-        return [item for item in self.in_progress_folder.iterdir() if item.is_dir()]
+        return [item for item in self._in_progress_folder.iterdir() if item.is_dir()]
 
     def _get_current_project_folder(self):
         projects = self._get_in_progress_projects()
@@ -108,7 +108,7 @@ class Api:
             lines = [
                 f"Task: {task['name']}",
                 "",
-                f"Completed: {'Yes' if task.get("done", False) else 'No'}",
+                f"Completed: {'Yes' if task.get('done', False) else 'No'}",
                 "",
                 "Subtasks:"
             ]
@@ -182,13 +182,13 @@ class Api:
         if current_project is not None:
             return self._serialize_project_state(current_project)
 
-        idea_folders = [folder for folder in self.ideas_folder.iterdir() if folder.is_dir()]
+        idea_folders = [folder for folder in self._ideas_folder.iterdir() if folder.is_dir()]
 
         if not idea_folders:
             return {"mode": "jar", "message": "No ideas found"}
 
         chosen_folder = random.choice(idea_folders)
-        destination = self.in_progress_folder / chosen_folder.name
+        destination = self._in_progress_folder / chosen_folder.name
 
         if destination.exists():
             return {"mode": "jar", "message": f"{chosen_folder.name} is already in InProgress"}
@@ -205,6 +205,333 @@ class Api:
         self._rewrite_task_files(destination, project_data)
 
         return self._serialize_project_state(destination)
+
+    def open_task(self, task_index: int):
+        project_folder = self._get_current_project_folder()
+        if project_folder is None:
+            return {"mode": "jar", "message": "No active project"}
+
+        return self._serialize_subtasks_state(project_folder, task_index)
+
+    def save_notes(self, text: str):
+        project_folder = self._get_current_project_folder()
+        if project_folder is None:
+            return {"ok": False, "message": "No active project"}
+
+        notes_file = self._notes_path(project_folder)
+        notes_file.write_text(text, encoding="utf-8")
+        return {"ok": True, "message": "Notes saved"}
+
+    def get_project_notes(self, project_name: str):
+        folder = self._completed_folder / project_name
+        notes_file = folder / "notes.txt"
+
+        if not folder.exists():
+            return {"ok": False, "message": "Project not found", "notes": ""}
+
+        if not notes_file.exists():
+            return {"ok": True, "notes": ""}
+
+        return {
+            "ok": True,
+            "notes": notes_file.read_text(encoding="utf-8")
+        }
+
+    def toggle_task(self, task_index: int):
+        project_folder = self._get_current_project_folder()
+        if project_folder is None:
+            return {"mode": "jar", "message": "No active project"}
+
+        project_data = self._load_project_data(project_folder)
+        tasks = project_data.get("tasks", [])
+
+        if not (0 <= task_index < len(tasks)):
+            return self._serialize_project_state(project_folder)
+
+        task = tasks[task_index]
+        new_state = not task.get("done", False)
+        task["done"] = new_state
+
+        for subtask in task.get("subtasks", []):
+            subtask["done"] = new_state
+
+        self._save_project_data(project_folder, project_data)
+        self._rewrite_task_files(project_folder, project_data)
+
+        if self._all_tasks_complete(project_data):
+            destination = self._completed_folder / project_folder.name
+            if destination.exists():
+                destination = self._completed_folder / f"{project_folder.name}_completed"
+            shutil.move(str(project_folder), str(destination))
+            return {"mode": "jar", "message": f"{project_data['name']} moved to Completed"}
+
+        return self._serialize_project_state(project_folder)
+
+    def toggle_subtask(self, task_index: int, subtask_index: int):
+        project_folder = self._get_current_project_folder()
+        if project_folder is None:
+            return {"mode": "jar", "message": "No active project"}
+
+        project_data = self._load_project_data(project_folder)
+        tasks = project_data.get("tasks", [])
+
+        if not (0 <= task_index < len(tasks)):
+            return self._serialize_project_state(project_folder)
+
+        task = tasks[task_index]
+        subtasks = task.get("subtasks", [])
+
+        if not (0 <= subtask_index < len(subtasks)):
+            return self._serialize_subtasks_state(project_folder, task_index)
+
+        subtasks[subtask_index]["done"] = not subtasks[subtask_index].get("done", False)
+
+        if subtasks:
+            task["done"] = all(st.get("done", False) for st in subtasks)
+
+        self._save_project_data(project_folder, project_data)
+        self._rewrite_task_files(project_folder, project_data)
+
+        if self._all_tasks_complete(project_data):
+            destination = self._completed_folder / project_folder.name
+            if destination.exists():
+                destination = self._completed_folder / f"{project_folder.name}_completed"
+            shutil.move(str(project_folder), str(destination))
+            return {"mode": "jar", "message": f"{project_data['name']} moved to Completed"}
+
+        return self._serialize_subtasks_state(project_folder, task_index)
+
+    def create_task(self, task_name: str, subtasks: list):
+        project_folder = self._get_current_project_folder()
+
+        if project_folder is None:
+            return {"mode": "jar", "message": "No active project"}
+
+        project_data = self._load_project_data(project_folder)
+        task_name = task_name.strip()
+
+        if not task_name:
+            return {
+                "mode": "tasks",
+                "projectName": project_data["name"],
+                "tasks": project_data.get("tasks", []),
+                "message": "Task name cannot be empty"
+            }
+
+        cleaned_subtasks = [sub.strip() for sub in subtasks if sub.strip()]
+        if not cleaned_subtasks:
+            return {
+                "mode": "tasks",
+                "projectName": project_data["name"],
+                "tasks": project_data.get("tasks", []),
+                "message": "A task needs at least 1 subtask"
+            }
+
+        task_entry = {
+            "name": task_name,
+            "done": False,
+            "subtasks": [
+                {"name": sub, "done": False}
+                for sub in cleaned_subtasks
+            ]
+        }
+
+        project_data.setdefault("tasks", []).append(task_entry)
+
+        self._save_project_data(project_folder, project_data)
+        self._rewrite_task_files(project_folder, project_data)
+
+        return self._serialize_project_state(project_folder)
+
+    def delete_task(self, task_index: int):
+        project_folder = self._get_current_project_folder()
+
+        if project_folder is None:
+            return {"mode": "jar", "message": "No active project"}
+
+        project_data = self._load_project_data(project_folder)
+        tasks = project_data.get("tasks", [])
+
+        if len(tasks) <= 1:
+            return {
+                "mode": "tasks",
+                "projectName": project_data["name"],
+                "tasks": tasks,
+                "message": "A project must have at least 1 task"
+            }
+
+        if not (0 <= task_index < len(tasks)):
+            return self._serialize_project_state(project_folder)
+
+        del tasks[task_index]
+
+        self._save_project_data(project_folder, project_data)
+        self._rewrite_task_files(project_folder, project_data)
+
+        return self._serialize_project_state(project_folder)
+
+    def delete_subtask(self, task_index: int, subtask_index: int):
+        project_folder = self._get_current_project_folder()
+
+        if project_folder is None:
+            return {"mode": "jar", "message": "No active project"}
+
+        project_data = self._load_project_data(project_folder)
+        tasks = project_data.get("tasks", [])
+
+        if not (0 <= task_index < len(tasks)):
+            return self._serialize_project_state(project_folder)
+
+        subtasks = tasks[task_index].get("subtasks", [])
+
+        if len(subtasks) <= 1:
+            return {
+                "mode": "subtasks",
+                "projectName": project_data["name"],
+                "taskIndex": task_index,
+                "taskName": tasks[task_index]["name"],
+                "taskDone": tasks[task_index].get("done", False),
+                "subtasks": subtasks,
+                "message": "A task must have at least 1 subtask"
+            }
+
+        if not (0 <= subtask_index < len(subtasks)):
+            return self._serialize_subtasks_state(project_folder, task_index)
+
+        del subtasks[subtask_index]
+
+        if subtasks:
+            tasks[task_index]["done"] = all(st.get("done", False) for st in subtasks)
+        else:
+            tasks[task_index]["done"] = False
+
+        self._save_project_data(project_folder, project_data)
+        self._rewrite_task_files(project_folder, project_data)
+
+        return self._serialize_subtasks_state(project_folder, task_index)
+
+    def create_project(self, project_name: str, tasks: list):
+        project_name = project_name.strip()
+        if not project_name:
+            return {"ok": False, "message": "Project name is empty"}
+
+        if not tasks:
+            return {"ok": False, "message": "You need at least 1 task"}
+
+        cleaned_tasks = []
+        for task in tasks:
+            task_name = task.get("name", "").strip()
+            subtasks = [sub.strip() for sub in task.get("subtasks", []) if sub.strip()]
+
+            if not task_name:
+                continue
+
+            if not subtasks:
+                return {"ok": False, "message": f'Task "{task_name}" needs at least 1 subtask'}
+
+            cleaned_tasks.append({
+                "name": task_name,
+                "done": False,
+                "subtasks": [{"name": sub, "done": False} for sub in subtasks]
+            })
+
+        if not cleaned_tasks:
+            return {"ok": False, "message": "You need at least 1 task"}
+
+        safe_project_name = self._safe_name(project_name)
+        project_folder = self._ideas_folder / safe_project_name
+
+        if project_folder.exists():
+            return {"ok": False, "message": "Project already exists"}
+
+        project_folder.mkdir(parents=True, exist_ok=True)
+        (project_folder / "tasks").mkdir(exist_ok=True)
+
+        (project_folder / "project.txt").write_text(project_name, encoding="utf-8")
+        (project_folder / "notes.txt").write_text("Describe what you built here...", encoding="utf-8")
+
+        project_data = {
+            "name": project_name,
+            "tasks": cleaned_tasks
+        }
+
+        self._save_project_data(project_folder, project_data)
+        self._rewrite_task_files(project_folder, project_data)
+
+        return {"ok": True, "message": f"{project_name} created"}
+
+    def pick_random_task(self):
+        project_folder = self._get_current_project_folder()
+        if project_folder is None:
+            return {"mode": "jar", "message": "No active project"}
+
+        project_data = self._load_project_data(project_folder)
+        tasks = project_data.get("tasks", [])
+
+        incomplete_tasks = [t for t in tasks if not t.get("done", False)]
+
+        if not incomplete_tasks:
+            return {
+                "mode": "tasks",
+                "projectName": project_data["name"],
+                "tasks": tasks,
+                "message": "All tasks complete"
+            }
+
+        chosen = random.choice(incomplete_tasks)
+
+        return {
+            "mode": "tasks",
+            "projectName": project_data["name"],
+            "tasks": tasks,
+            "highlightTask": chosen["name"]
+        }
+
+    def pick_random_subtask(self, task_index: int):
+        project_folder = self._get_current_project_folder()
+        if project_folder is None:
+            return {"mode": "jar", "message": "No active project"}
+
+        project_data = self._load_project_data(project_folder)
+        tasks = project_data.get("tasks", [])
+
+        if not (0 <= task_index < len(tasks)):
+            return self._serialize_project_state(project_folder)
+
+        task = tasks[task_index]
+        subtasks = [s for s in task.get("subtasks", []) if not s.get("done", False)]
+
+        if not subtasks:
+            return self._serialize_subtasks_state(project_folder, task_index)
+
+        chosen = random.choice(subtasks)
+
+        return {
+            "mode": "subtasks",
+            "projectName": project_data["name"],
+            "taskIndex": task_index,
+            "taskName": task["name"],
+            "taskDone": task.get("done", False),
+            "highlightSubtask": chosen["name"],
+            "subtasks": task.get("subtasks", [])
+        }
+
+    def resize_window(self, width: int, height: int):
+        if webview.windows:
+            webview.windows[0].resize(width, height)
+
+    def get_completed_projects(self):
+        projects = []
+
+        for folder in self._completed_folder.iterdir():
+            if folder.is_dir():
+                projects.append(folder.name)
+
+        return {
+            "mode": "completed",
+            "projects": projects,
+            "count": len(projects)
+        }
 
     def close_app(self):
         if webview.windows:
