@@ -1,15 +1,47 @@
 import json
+import os
 import random
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import webview
 
-programVersion = "0.0.1"
+
+def get_app_root() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
+def get_ui_file() -> Path:
+    if hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS) / "ui" / "index.html"
+    return Path(__file__).resolve().parent / "ui" / "index.html"
+
+
+def ensure_started_via_launcher() -> bool:
+    if os.environ.get("IDEAJAR_STARTED_BY_LAUNCHER") == "1":
+        return True
+
+    app_root = get_app_root()
+    launcher_path = app_root / "launcher"
+
+    if not launcher_path.exists():
+        return True
+
+    try:
+        subprocess.Popen([str(launcher_path)], cwd=str(app_root))
+    except Exception as e:
+        print(f"Failed to start launcher: {e}")
+        return True
+
+    return False
 
 
 def ensure_app_folders():
-    app_root = Path(__file__).resolve().parent
+    app_root = get_app_root()
     base_folder = app_root / "IdeaFolder"
     ideas_folder = base_folder / "Ideas"
     in_progress_folder = base_folder / "InProgress"
@@ -539,9 +571,12 @@ class Api:
 
 
 if __name__ == "__main__":
+    if not ensure_started_via_launcher():
+        sys.exit(0)
+
     ensure_app_folders()
 
-    ui_file = Path(__file__).resolve().parent / "ui" / "index.html"
+    ui_file = get_ui_file()
 
     webview.create_window(
         "Idea Jar",
