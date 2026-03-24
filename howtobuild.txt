@@ -1,0 +1,1 @@
+ pyinstaller --noconfirm --clean --onefile --name IdeaJar --add-data "app/ui:ui" app/main.py

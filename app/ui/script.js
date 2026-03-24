@@ -30,7 +30,16 @@ const completedList = document.getElementById("completedList");
 const messagePopup = document.getElementById("messagePopup");
 const messageText = document.getElementById("messageText");
 
+const jarControls = document.getElementById("jarControls");
+const jarTagFilter = document.getElementById("jarTagFilter");
+const projectTagsList = document.getElementById("projectTagsList");
+const subtaskProjectTagsList = document.getElementById("subtaskProjectTagsList");
+const editTagsButton = document.getElementById("editTagsButton");
+
 let currentSubtaskTaskIndex = null;
+let availableTagsCache = [];
+let selectedJarTag = "";
+let messageTimeout = null;
 
 function resizeToElement(element, extraWidth = 40, extraHeight = 70, minWidth = 240, minHeight = 240) {
     const width = Math.max(minWidth, Math.ceil(element.offsetWidth + extraWidth));
@@ -42,24 +51,155 @@ function hideAllPanels() {
     taskPanel.classList.add("hidden");
     subtaskPanel.classList.add("hidden");
     completedPanel.classList.add("hidden");
+}
+
+function hideMessage() {
     messagePopup.classList.add("hidden");
+    messageText.textContent = "";
+
+    if (messageTimeout) {
+        clearTimeout(messageTimeout);
+        messageTimeout = null;
+    }
 }
 
 function showMessage(text) {
+    if (!text) return;
+
     messageText.textContent = text;
     messagePopup.classList.remove("hidden");
+
+    if (messageTimeout) {
+        clearTimeout(messageTimeout);
+    }
+
+    messageTimeout = setTimeout(() => {
+        hideMessage();
+    }, 10000);
 }
 
-function showJarMode() {
+function normalizeTag(tag) {
+    if (tag === null || tag === undefined) return "";
+    let value = String(tag).trim().toLowerCase();
+    if (!value) return "";
+    if (!value.startsWith("#")) {
+        value = `#${value}`;
+    }
+    return value;
+}
+
+function parseTagsInput(rawText) {
+    if (!rawText || !rawText.trim()) {
+        return [];
+    }
+
+    const parts = rawText
+        .split(",")
+        .map((tag) => normalizeTag(tag))
+        .filter(Boolean);
+
+    return [...new Set(parts)];
+}
+
+function tagsToPromptText(tags) {
+    return (tags || []).join(", ");
+}
+
+function updateAvailableTags(tags) {
+    availableTagsCache = Array.isArray(tags) ? [...tags] : [];
+
+    const previousValue = selectedJarTag || jarTagFilter.value || "";
+
+    jarTagFilter.innerHTML = "";
+
+    const allOption = document.createElement("option");
+    allOption.value = "";
+    allOption.textContent = "All Ideas";
+    jarTagFilter.appendChild(allOption);
+
+    availableTagsCache.forEach((tag) => {
+        const option = document.createElement("option");
+        option.value = tag;
+        option.textContent = tag;
+        jarTagFilter.appendChild(option);
+    });
+
+    if (availableTagsCache.includes(previousValue)) {
+        jarTagFilter.value = previousValue;
+        selectedJarTag = previousValue;
+    } else {
+        jarTagFilter.value = "";
+        selectedJarTag = "";
+    }
+}
+
+async function refreshJarTagsFromBackend() {
+    try {
+        const tagResponse = await window.pywebview.api.get_available_tags();
+        const registryTags = Array.isArray(tagResponse?.tags) ? tagResponse.tags : [];
+        const validTags = [];
+
+        for (const rawTag of registryTags) {
+            const tag = normalizeTag(rawTag);
+            if (!tag) continue;
+
+            try {
+                const result = await window.pywebview.api.get_ideas_by_tag(tag);
+                if (result && result.count > 0) {
+                    validTags.push(tag);
+                }
+            } catch (error) {
+                console.error(`Failed checking tag ${tag}:`, error);
+            }
+        }
+
+        updateAvailableTags(validTags);
+    } catch (error) {
+        console.error("Failed to refresh tags:", error);
+        updateAvailableTags([]);
+    }
+}
+
+function renderTagList(container, tags) {
+    container.innerHTML = "";
+
+    if (!tags || tags.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "tagEmpty";
+        empty.textContent = "No tags";
+        container.appendChild(empty);
+        return;
+    }
+
+    tags.forEach((tag) => {
+        const chip = document.createElement("span");
+        chip.className = "tagChip";
+        chip.textContent = tag;
+        container.appendChild(chip);
+    });
+}
+
+function showJarModeLayout() {
     hideAllPanels();
 
     pickButton.classList.remove("hidden");
     pickButton.classList.remove("disabled");
     createIdeaButton.classList.remove("hidden");
+    jarControls.classList.remove("hidden");
+}
+
+async function showJarMode(state = {}) {
+    showJarModeLayout();
+
+    await refreshJarTagsFromBackend();
 
     setTimeout(() => {
-        resizeToElement(document.querySelector(".jarContainer"), 30, 30, 240, 240);
+        resizeToElement(document.querySelector(".jarContainer"), 30, 30, 260, 270);
     }, 10);
+
+    if (state.message) {
+        showMessage(state.message);
+    }
 }
 
 function createCheckbox(isChecked = false, ariaLabel = "Checkbox") {
@@ -83,15 +223,27 @@ function createDeleteButton(ariaLabel = "Delete") {
     return deleteButton;
 }
 
+function createTaskToggleButton(isDone, labelText) {
+    const checkbox = createCheckbox(isDone, labelText);
+
+    checkbox.addEventListener("click", async (event) => {
+        event.stopPropagation();
+    });
+
+    return checkbox;
+}
+
 function showTaskPanel(state) {
     hideAllPanels();
 
     pickButton.classList.add("hidden");
     createIdeaButton.classList.add("hidden");
+    jarControls.classList.add("hidden");
 
     taskPanel.classList.remove("hidden");
     taskPanelTitle.textContent = state.projectName || "Project";
     taskList.innerHTML = "";
+    renderTagList(projectTagsList, state.tags || []);
 
     (state.tasks || []).forEach((task, taskIndex) => {
         const taskItem = document.createElement("div");
@@ -100,15 +252,15 @@ function showTaskPanel(state) {
         const row = document.createElement("div");
         row.className = "taskRow";
 
-        const checkbox = createCheckbox(task.done, `Open task ${task.name}`);
+        const statusButton = createTaskToggleButton(task.done, `Task status for ${task.name}`);
 
         if (state.highlightTask && state.highlightTask === task.name) {
-            checkbox.classList.add("highlighted");
+            statusButton.classList.add("highlighted");
         }
 
-        checkbox.addEventListener("click", async () => {
-            const newState = await window.pywebview.api.open_task(taskIndex);
-            handleState(newState);
+        statusButton.addEventListener("click", async () => {
+            const newState = await window.pywebview.api.toggle_task(taskIndex);
+            await handleState(newState);
         });
 
         const openButton = document.createElement("button");
@@ -116,13 +268,17 @@ function showTaskPanel(state) {
         openButton.type = "button";
         openButton.textContent = task.name;
 
+        if (task.done) {
+            openButton.classList.add("doneText");
+        }
+
         if (state.highlightTask && state.highlightTask === task.name) {
             openButton.classList.add("highlighted");
         }
 
         openButton.addEventListener("click", async () => {
             const newState = await window.pywebview.api.open_task(taskIndex);
-            handleState(newState);
+            await handleState(newState);
         });
 
         const deleteButton = createDeleteButton(`Delete task ${task.name}`);
@@ -130,10 +286,10 @@ function showTaskPanel(state) {
         deleteButton.addEventListener("click", async () => {
             if (!confirm("Delete this task?")) return;
             const newState = await window.pywebview.api.delete_task(taskIndex);
-            handleState(newState);
+            await handleState(newState);
         });
 
-        row.appendChild(checkbox);
+        row.appendChild(statusButton);
         row.appendChild(openButton);
         row.appendChild(deleteButton);
 
@@ -142,8 +298,12 @@ function showTaskPanel(state) {
     });
 
     setTimeout(() => {
-        resizeToElement(taskPanel, 40, 55, 320, 180);
+        resizeToElement(taskPanel, 40, 55, 340, 220);
     }, 10);
+
+    if (state.message) {
+        showMessage(state.message);
+    }
 }
 
 function showSubtaskPanel(state) {
@@ -151,11 +311,13 @@ function showSubtaskPanel(state) {
 
     pickButton.classList.add("hidden");
     createIdeaButton.classList.add("hidden");
+    jarControls.classList.add("hidden");
 
     subtaskPanel.classList.remove("hidden");
     subtaskPanelTitle.textContent = state.taskName || "Subtasks";
     subtaskList.innerHTML = "";
     currentSubtaskTaskIndex = state.taskIndex;
+    renderTagList(subtaskProjectTagsList, state.tags || []);
 
     (state.subtasks || []).forEach((subtask, subtaskIndex) => {
         const subtaskItem = document.createElement("div");
@@ -175,13 +337,17 @@ function showSubtaskPanel(state) {
                 state.taskIndex,
                 subtaskIndex
             );
-            handleState(newState);
+            await handleState(newState);
         });
 
         const subtaskButton = document.createElement("button");
         subtaskButton.className = "taskButton";
         subtaskButton.type = "button";
         subtaskButton.textContent = subtask.name;
+
+        if (subtask.done) {
+            subtaskButton.classList.add("doneText");
+        }
 
         if (state.highlightSubtask && state.highlightSubtask === subtask.name) {
             subtaskButton.classList.add("highlighted");
@@ -192,7 +358,7 @@ function showSubtaskPanel(state) {
                 state.taskIndex,
                 subtaskIndex
             );
-            handleState(newState);
+            await handleState(newState);
         });
 
         const deleteButton = createDeleteButton(`Delete subtask ${subtask.name}`);
@@ -203,7 +369,7 @@ function showSubtaskPanel(state) {
                 state.taskIndex,
                 subtaskIndex
             );
-            handleState(newState);
+            await handleState(newState);
         });
 
         row.appendChild(checkbox);
@@ -215,8 +381,12 @@ function showSubtaskPanel(state) {
     });
 
     setTimeout(() => {
-        resizeToElement(subtaskPanel, 40, 55, 320, 180);
+        resizeToElement(subtaskPanel, 40, 55, 340, 220);
     }, 10);
+
+    if (state.message) {
+        showMessage(state.message);
+    }
 }
 
 function showCompletedPanel(state) {
@@ -224,59 +394,87 @@ function showCompletedPanel(state) {
 
     pickButton.classList.add("hidden");
     createIdeaButton.classList.add("hidden");
+    jarControls.classList.add("hidden");
 
     completedPanel.classList.remove("hidden");
     completedCount.textContent = `Completed projects: ${state.count}`;
     completedList.innerHTML = "";
 
-    (state.projects || []).forEach((name) => {
+    (state.projects || []).forEach((project) => {
         const item = document.createElement("div");
         item.className = "taskItem";
-        item.textContent = name;
+
+        const title = document.createElement("div");
+        title.className = "completedProjectName";
+        title.textContent = project.name || "Untitled";
+
+        const tags = document.createElement("div");
+        tags.className = "completedProjectTags";
+        renderTagList(tags, project.tags || []);
+
+        item.appendChild(title);
+        item.appendChild(tags);
+
         completedList.appendChild(item);
     });
 
     setTimeout(() => {
-        resizeToElement(completedPanel, 40, 55, 320, 180);
+        resizeToElement(completedPanel, 40, 55, 340, 220);
     }, 10);
+
+    if (state.message) {
+        showMessage(state.message);
+    }
 }
 
-function handleState(state) {
+async function handleState(state) {
     if (!state) return;
 
     if (state.mode === "jar") {
-        showJarMode();
-        if (state.message) showMessage(state.message);
+        await showJarMode(state);
         return;
     }
 
     if (state.mode === "tasks") {
         showTaskPanel(state);
-        if (state.message) showMessage(state.message);
         return;
     }
 
     if (state.mode === "subtasks") {
         showSubtaskPanel(state);
-        if (state.message) showMessage(state.message);
         return;
     }
 
     if (state.mode === "completed") {
         showCompletedPanel(state);
-        if (state.message) showMessage(state.message);
     }
 }
 
 pickButton.addEventListener("click", async () => {
-    const state = await window.pywebview.api.pick_idea();
-    handleState(state);
+    const chosenTag = normalizeTag(jarTagFilter.value);
+    selectedJarTag = chosenTag;
+
+    const state = chosenTag
+        ? await window.pywebview.api.pick_idea(chosenTag)
+        : await window.pywebview.api.pick_idea();
+
+    await handleState(state);
+});
+
+jarTagFilter.addEventListener("change", () => {
+    selectedJarTag = normalizeTag(jarTagFilter.value);
 });
 
 createIdeaButton.addEventListener("click", async () => {
     const projectName = prompt("Project Name?");
     if (!projectName || !projectName.trim()) return;
 
+    const tagInput = prompt(
+        "Project tags? Use commas.\nExample: #game, #personal",
+        ""
+    );
+
+    const tags = parseTagsInput(tagInput || "");
     const tasks = [];
 
     while (true) {
@@ -306,11 +504,20 @@ createIdeaButton.addEventListener("click", async () => {
         return;
     }
 
-    const response = await window.pywebview.api.create_project(projectName.trim(), tasks);
+    for (const tag of tags) {
+        await window.pywebview.api.create_tag(tag);
+    }
+
+    const response = await window.pywebview.api.create_project(projectName.trim(), tasks, tags);
 
     if (response.message) {
         showMessage(response.message);
     }
+
+    await refreshJarTagsFromBackend();
+
+    const startupState = await window.pywebview.api.get_startup_state();
+    await handleState(startupState);
 });
 
 createTaskButton.addEventListener("click", async () => {
@@ -330,60 +537,87 @@ createTaskButton.addEventListener("click", async () => {
     }
 
     const newState = await window.pywebview.api.create_task(taskName.trim(), subtasks);
-    handleState(newState);
+    await handleState(newState);
+});
+
+editTagsButton.addEventListener("click", async () => {
+    const currentTags = Array.from(projectTagsList.querySelectorAll(".tagChip")).map((chip) => chip.textContent);
+
+    const raw = prompt(
+        "Edit project tags. Use commas.\nExample: #game, #personal",
+        tagsToPromptText(currentTags)
+    );
+
+    if (raw === null) return;
+
+    const tags = parseTagsInput(raw);
+
+    for (const tag of tags) {
+        await window.pywebview.api.create_tag(tag);
+    }
+
+    const newState = await window.pywebview.api.update_project_tags(tags);
+    await refreshJarTagsFromBackend();
+    await handleState(newState);
 });
 
 randomTaskButton.addEventListener("click", async () => {
     const state = await window.pywebview.api.pick_random_task();
-    handleState(state);
+    await handleState(state);
 });
 
 randomSubtaskButton.addEventListener("click", async () => {
     if (currentSubtaskTaskIndex === null) return;
     const state = await window.pywebview.api.pick_random_subtask(currentSubtaskTaskIndex);
-    handleState(state);
+    await handleState(state);
 });
 
 backButton.addEventListener("click", async () => {
     const state = await window.pywebview.api.get_startup_state();
-    handleState(state);
+    await handleState(state);
 });
 
 completedBackButton.addEventListener("click", async () => {
     const state = await window.pywebview.api.get_startup_state();
-    handleState(state);
+    await handleState(state);
 });
 
 closeButton.addEventListener("click", async () => {
     await window.pywebview.api.close_app();
 });
 
+messagePopup.addEventListener("click", () => {
+    hideMessage();
+});
+
 tasksTab.addEventListener("click", async () => {
     const state = await window.pywebview.api.get_startup_state();
-    handleState(state);
+    await handleState(state);
 });
 
 completedTab.addEventListener("click", async () => {
     const state = await window.pywebview.api.get_completed_projects();
-    handleState(state);
+    await handleState(state);
 });
 
 subtasksTasksTab.addEventListener("click", async () => {
     const state = await window.pywebview.api.get_startup_state();
-    handleState(state);
+    await handleState(state);
 });
 
 subtasksCompletedTab.addEventListener("click", async () => {
     const state = await window.pywebview.api.get_completed_projects();
-    handleState(state);
+    await handleState(state);
 });
 
 completedTasksTab.addEventListener("click", async () => {
     const state = await window.pywebview.api.get_startup_state();
-    handleState(state);
+    await handleState(state);
 });
 
 window.addEventListener("pywebviewready", async () => {
+    await refreshJarTagsFromBackend();
+
     const startupState = await window.pywebview.api.get_startup_state();
-    handleState(startupState);
+    await handleState(startupState);
 });
