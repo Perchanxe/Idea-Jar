@@ -102,6 +102,7 @@ body {
     background-size: 100% 100%;
     image-rendering: pixelated;
     box-sizing: border-box;
+    scrollbar-width: none;
 }
 
 .panelContent {
@@ -141,6 +142,12 @@ body {
     width: 100%;
 }
 
+.jarPickerRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .jarPickerButton {
     width: 100%;
     padding: 10px 12px;
@@ -151,10 +158,28 @@ body {
     text-align: left;
     cursor: pointer;
     box-sizing: border-box;
+    flex: 1;
 }
 
 .jarPickerButton:hover {
     background: rgba(255, 255, 255, 0.18);
+}
+
+.deleteJarX {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.deleteJarX:hover {
+    color: red;
 }
 
 
@@ -385,6 +410,7 @@ body {
 #createJarButton,
 #completedIdeasButton,
 #createTaskButton,
+#createSubtaskButton,
 #subtasksBackButton,
 #randomTaskButton,
 #randomSubtaskButton,
@@ -402,6 +428,7 @@ body {
 #createJarButton:hover,
 #completedIdeasButton:hover,
 #createTaskButton:hover,
+#createSubtaskButton:hover,
 #subtasksBackButton:hover,
 #randomTaskButton:hover,
 #randomSubtaskButton:hover,
@@ -436,4 +463,8 @@ body {
 #messageText {
     margin: 0;
     word-break: break-word;
+}
+
+.uiPanelShell {
+    position: relative;
 }

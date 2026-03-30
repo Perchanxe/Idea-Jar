@@ -824,6 +824,33 @@ class JarStorage:
             "jars": jars,
             "count": len(jars)
         }
+    
+    def delete_jar(self, jar_slug: str):
+        """
+        Purpose:
+            Delete an entire jar and remove it from registry.
+
+        Parameters:
+            jar_slug (str): Jar slug.
+
+        Return:
+            dict: Updated jar picker state.
+        """
+
+        jar_folder = self._jar_folder(jar_slug)
+
+        if not jar_folder.exists():
+            return self._serialize_jar_picker_state()
+
+        # Delete folder
+        shutil.rmtree(jar_folder, ignore_errors=True)
+
+        # Remove from registry
+        jars = self._load_jar_registry()
+        jars = [j for j in jars if j.get("slug") != jar_slug]
+        self._save_jar_registry(jars)
+
+        return self._serialize_jar_picker_state()
 
     def open_jar(self, jar_slug: str):
         """
@@ -1140,6 +1167,44 @@ class JarStorage:
             return self._serialize_project_state(jar_slug, project_folder, "All tasks complete")
 
         task_index, _task = random.choice(candidates)
+        return self._serialize_subtasks_state(jar_slug, project_folder, task_index)
+
+    def create_subtask(self, jar_slug: str, task_index: int, subtask_name: str):
+        """
+        Purpose:
+            Add a subtask to a task in the active project.
+
+        Parameters:
+            jar_slug (str): Jar slug.
+            task_index (int): Task index.
+            subtask_name (str): New subtask name.
+
+        Return:
+            dict: Frontend state dictionary.
+        """
+        project_folder = self._get_active_project_folder(jar_slug)
+        if project_folder is None:
+            return self._serialize_jar_state(jar_slug, "No active project")
+
+        subtask_name = self._normalize_text(subtask_name)
+        if not subtask_name:
+            return self._serialize_subtasks_state(jar_slug, project_folder, task_index, "Subtask name cannot be empty")
+
+        project_data = self._load_project_data(project_folder)
+        tasks = project_data.get("tasks", [])
+
+        if not (0 <= task_index < len(tasks)):
+            return self._serialize_project_state(jar_slug, project_folder)
+
+        task = tasks[task_index]
+        task.setdefault("subtasks", []).append({
+            "name": subtask_name,
+            "done": False
+        })
+
+        task["done"] = all(st.get("done", False) for st in task.get("subtasks", [])) if task.get("subtasks") else False
+
+        self._save_project_data(project_folder, project_data)
         return self._serialize_subtasks_state(jar_slug, project_folder, task_index)
 
     def rename_subtask(self, jar_slug: str, task_index: int, subtask_index: int, new_name: str):

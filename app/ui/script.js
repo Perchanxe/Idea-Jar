@@ -71,6 +71,7 @@ const DOM = {
     randomTaskButton: document.getElementById("randomTaskButton"),
     randomSubtaskButton: document.getElementById("randomSubtaskButton"),
     createTaskButton: document.getElementById("createTaskButton"),
+    createSubtaskButton: document.getElementById("createSubtaskButton"),
 
     completedJarBackButton: document.getElementById("completedJarBackButton"),
     completedAllBackButton: document.getElementById("completedAllBackButton"),
@@ -101,7 +102,9 @@ const STATE = {
     currentTaskIndex: null,
     currentMode: "",
     currentProjectName: "",
-    messageTimeout: null
+    messageTimeout: null,
+    scrollTaskPanelToBottomAfterRender: false,
+    scrollSubtaskPanelToBottomAfterRender: false
 };
 
 /* =========================
@@ -166,6 +169,33 @@ function resizeToElement(element, extraWidth = 40, extraHeight = 70, minWidth = 
 
     debugLog("Resizing window", { width, height });
     window.pywebview.api.resize_window(width, height);
+}
+
+/**
+ * Purpose:
+ *     Scroll a panel to its bottom after DOM/layout has settled.
+ *
+ * Parameters:
+ *     panel (HTMLElement | null): The scrollable panel element.
+ *
+ * Return:
+ *     None
+ */
+function scrollPanelToBottom(panel) {
+    if (!panel) {
+        debugError("scrollPanelToBottom called with missing panel");
+        return;
+    }
+
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            panel.scrollTop = panel.scrollHeight;
+            debugLog("Scrolled panel to bottom", {
+                scrollTop: panel.scrollTop,
+                scrollHeight: panel.scrollHeight
+            });
+        });
+    });
 }
 
 /**
@@ -490,6 +520,9 @@ function showJarPickerPanel(state) {
         const item = document.createElement("div");
         item.className = "jarPickerItem";
 
+        const row = document.createElement("div");
+        row.className = "jarPickerRow";
+
         const openButton = createTextButton(
             `${jar.name} (${jar.ideasCount} ideas / ${jar.inProgressCount} active / ${jar.completedCount} completed)`,
             "jarPickerButton",
@@ -502,7 +535,26 @@ function showJarPickerPanel(state) {
             await handleState(newState);
         });
 
-        item.appendChild(openButton);
+        const deleteButton = document.createElement("button");
+        deleteButton.className = "deleteJarX";
+        deleteButton.type = "button";
+        deleteButton.setAttribute("aria-label", `Delete jar ${jar.name}`);
+        deleteButton.textContent = "✕";
+
+        deleteButton.addEventListener("click", async (event) => {
+            event.stopPropagation();
+
+            if (!confirm(`Delete "${jar.name}"? This cannot be undone.`)) return;
+
+            debugLog("Deleting jar from picker", jar.slug);
+            const newState = await window.pywebview.api.delete_jar(jar.slug);
+            await handleState(newState);
+        });
+
+        row.appendChild(openButton);
+        row.appendChild(deleteButton);
+
+        item.appendChild(row);
         DOM.jarPickerList.appendChild(item);
     });
 
@@ -653,6 +705,11 @@ function showTaskPanel(state) {
         resizeToElement(DOM.taskPanel, 40, 55, 420, 260);
     }, 10);
 
+    if (STATE.scrollTaskPanelToBottomAfterRender) {
+        STATE.scrollTaskPanelToBottomAfterRender = false;
+        scrollPanelToBottom(DOM.taskPanel);
+    }
+
     if (state.message) {
         showMessage(state.message);
     }
@@ -798,6 +855,11 @@ function showSubtaskPanel(state) {
     setTimeout(() => {
         resizeToElement(DOM.subtaskPanel, 40, 55, 420, 260);
     }, 10);
+
+    if (STATE.scrollSubtaskPanelToBottomAfterRender) {
+        STATE.scrollSubtaskPanelToBottomAfterRender = false;
+        scrollPanelToBottom(DOM.subtaskPanel);
+    }
 
     if (state.message) {
         showMessage(state.message);
@@ -1061,10 +1123,36 @@ function bindEvents() {
         if (!data) return;
 
         debugLog("Creating task", data);
+
+        STATE.scrollTaskPanelToBottomAfterRender = true;
+
         const state = await window.pywebview.api.create_task(
             STATE.currentJarSlug,
             data.taskName,
             data.subtasks
+        );
+
+        await handleState(state);
+    });
+
+    DOM.createSubtaskButton?.addEventListener("click", async () => {
+        if (!STATE.currentJarSlug || STATE.currentTaskIndex === null) return;
+
+        const subtaskName = promptNonEmpty("Subtask name?");
+        if (!subtaskName) return;
+
+        debugLog("Creating subtask", {
+            jarSlug: STATE.currentJarSlug,
+            taskIndex: STATE.currentTaskIndex,
+            subtaskName
+        });
+
+        STATE.scrollSubtaskPanelToBottomAfterRender = true;
+
+        const state = await window.pywebview.api.create_subtask(
+            STATE.currentJarSlug,
+            STATE.currentTaskIndex,
+            subtaskName
         );
 
         await handleState(state);

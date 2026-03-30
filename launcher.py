@@ -8,6 +8,7 @@ import zipfile
 import subprocess
 import threading
 import tkinter as tk
+import platform
 from pathlib import Path
 
 VERSION_URL = "https://www.asoody.com/programs/idea-jar/version.json"
@@ -17,11 +18,39 @@ if getattr(sys, "frozen", False):
 else:
     BASE_DIR = Path(__file__).resolve().parent
 
-APP_PATH = BASE_DIR / "IdeaJar"
-VERSION_FILE = BASE_DIR / "version.txt"
 
-TEMP_DIR = BASE_DIR / "_update_tmp"
-ZIP_PATH = BASE_DIR / "update.zip"
+def get_install_dir() -> Path:
+    """
+    Purpose:
+        Return the stable install directory for the current operating system.
+
+    Parameters:
+        None
+
+    Return:
+        Path: OS-specific install directory path.
+    """
+    system_name = platform.system()
+
+    if system_name == "Windows":
+        local_app_data = os.getenv("LOCALAPPDATA")
+        if local_app_data:
+            return Path(local_app_data) / "IdeaJar"
+        return Path.home() / "AppData" / "Local" / "IdeaJar"
+
+    if system_name == "Linux":
+        return Path.home() / "IdeaJar"
+
+    return BASE_DIR
+
+
+INSTALL_DIR = get_install_dir()
+APP_FILENAME = "IdeaJar.exe" if platform.system() == "Windows" else "IdeaJar"
+APP_PATH = INSTALL_DIR / APP_FILENAME
+VERSION_FILE = INSTALL_DIR / "version.txt"
+
+TEMP_DIR = INSTALL_DIR / "_update_tmp"
+ZIP_PATH = INSTALL_DIR / "update.zip"
 
 
 class StatusPopup:
@@ -101,6 +130,20 @@ class StatusPopup:
             self.root.destroy()
         except Exception:
             pass
+
+
+def ensure_install_dir():
+    """
+    Purpose:
+        Ensure the OS-specific install directory exists before launch/update work.
+
+    Parameters:
+        None
+
+    Return:
+        None
+    """
+    INSTALL_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def get_local_version():
@@ -210,12 +253,67 @@ def make_executable(path: Path):
     Return:
         None
     """
+    if platform.system() == "Windows":
+        return
+
     try:
         current_mode = path.stat().st_mode
         path.chmod(current_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         print(f"Made executable: {path}", flush=True)
     except Exception as e:
         print(f"Failed to chmod {path}: {e}", flush=True)
+
+
+def find_extracted_app(temp_dir: Path) -> Path | None:
+    """
+    Purpose:
+        Find the extracted app binary inside the update temp directory.
+
+    Parameters:
+        temp_dir (Path): Temporary extraction directory.
+
+    Return:
+        Path | None: Path to the extracted app binary, or None if missing.
+    """
+    direct_path = temp_dir / APP_FILENAME
+    if direct_path.exists():
+        return direct_path
+
+    nested_path = temp_dir / "IdeaJar" / APP_FILENAME
+    if nested_path.exists():
+        return nested_path
+
+    for candidate in temp_dir.rglob(APP_FILENAME):
+        if candidate.is_file():
+            return candidate
+
+    return None
+
+
+def find_extracted_version_file(temp_dir: Path) -> Path | None:
+    """
+    Purpose:
+        Find the extracted version.txt file inside the update temp directory.
+
+    Parameters:
+        temp_dir (Path): Temporary extraction directory.
+
+    Return:
+        Path | None: Path to version.txt, or None if missing.
+    """
+    direct_path = temp_dir / "version.txt"
+    if direct_path.exists():
+        return direct_path
+
+    nested_path = temp_dir / "IdeaJar" / "version.txt"
+    if nested_path.exists():
+        return nested_path
+
+    for candidate in temp_dir.rglob("version.txt"):
+        if candidate.is_file():
+            return candidate
+
+    return None
 
 
 def apply_update(zip_url, popup: StatusPopup):
@@ -231,6 +329,7 @@ def apply_update(zip_url, popup: StatusPopup):
         None
     """
     popup.set_status("Updating...")
+    ensure_install_dir()
 
     if TEMP_DIR.exists():
         print(f"Removing old temp dir: {TEMP_DIR}", flush=True)
@@ -246,14 +345,14 @@ def apply_update(zip_url, popup: StatusPopup):
     with zipfile.ZipFile(ZIP_PATH, "r") as zip_ref:
         zip_ref.extractall(TEMP_DIR)
 
-    new_app = TEMP_DIR / "IdeaJar"
-    new_version = TEMP_DIR / "version.txt"
+    new_app = find_extracted_app(TEMP_DIR)
+    new_version = find_extracted_version_file(TEMP_DIR)
 
-    print(f"Looking for new app at: {new_app}", flush=True)
-    print(f"Looking for new version file at: {new_version}", flush=True)
+    print(f"Looking for new app. Found: {new_app}", flush=True)
+    print(f"Looking for new version file. Found: {new_version}", flush=True)
 
-    if not new_app.exists():
-        raise Exception("Invalid update package: IdeaJar not found in zip")
+    if new_app is None or not new_app.exists():
+        raise Exception(f"Invalid update package: {APP_FILENAME} not found in zip")
 
     if APP_PATH.exists():
         print(f"Removing old app: {APP_PATH}", flush=True)
@@ -263,8 +362,10 @@ def apply_update(zip_url, popup: StatusPopup):
     shutil.move(str(new_app), str(APP_PATH))
     make_executable(APP_PATH)
 
-    if new_version.exists():
+    if new_version is not None and new_version.exists():
         print(f"Updating version file: {new_version} -> {VERSION_FILE}", flush=True)
+        if VERSION_FILE.exists():
+            VERSION_FILE.unlink()
         shutil.move(str(new_version), str(VERSION_FILE))
     else:
         print("No version.txt found in update zip", flush=True)
@@ -302,7 +403,7 @@ def launch_app(popup: StatusPopup):
 
     subprocess.Popen(
         [str(APP_PATH)],
-        cwd=str(BASE_DIR),
+        cwd=str(INSTALL_DIR),
         env=env
     )
 
@@ -322,6 +423,7 @@ def main_work(popup: StatusPopup):
         None
     """
     try:
+        ensure_install_dir()
         popup.set_status("Checking for update...")
 
         local_version = get_local_version()
@@ -363,8 +465,11 @@ def main():
     """
     print("Launcher started", flush=True)
     print(f"BASE_DIR: {BASE_DIR}", flush=True)
+    print(f"INSTALL_DIR: {INSTALL_DIR}", flush=True)
     print(f"APP_PATH: {APP_PATH}", flush=True)
     print(f"VERSION_FILE: {VERSION_FILE}", flush=True)
+    print(f"TEMP_DIR: {TEMP_DIR}", flush=True)
+    print(f"ZIP_PATH: {ZIP_PATH}", flush=True)
 
     popup = StatusPopup()
 
