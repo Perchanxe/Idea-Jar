@@ -1,207 +1,324 @@
-const pickButton = document.getElementById("pickButton");
-const closeButton = document.getElementById("closeButton");
-const createIdeaButton = document.getElementById("createIdeaButton");
-const createTaskButton = document.getElementById("createTaskButton");
-const backButton = document.getElementById("backButton");
+/**
+ * Purpose:
+ *     Main frontend controller for the jar-first Idea Jar app.
+ *     This single file handles:
+ *     - DOM lookups
+ *     - shared frontend state
+ *     - panel rendering
+ *     - button wiring
+ *     - pywebview startup flow
+ *     - debug logging
+ *
+ * Parameters:
+ *     None
+ *
+ * Return:
+ *     None
+ */
 
-const randomTaskButton = document.getElementById("randomTaskButton");
-const randomSubtaskButton = document.getElementById("randomSubtaskButton");
+console.log("[IdeaJar] script.js loaded");
 
-const tasksTab = document.getElementById("tasksTab");
-const completedTab = document.getElementById("completedTab");
-const subtasksTasksTab = document.getElementById("subtasksTasksTab");
-const subtasksCompletedTab = document.getElementById("subtasksCompletedTab");
-const completedTasksTab = document.getElementById("completedTasksTab");
-const completedBackButton = document.getElementById("completedBackButton");
+/* =========================
+   DOM REFERENCES
+========================= */
 
-const taskPanel = document.getElementById("taskPanel");
-const subtaskPanel = document.getElementById("subtaskPanel");
-const completedPanel = document.getElementById("completedPanel");
+/**
+ * Purpose:
+ *     Store all DOM references in one object so the app can safely access them.
+ *
+ * Parameters:
+ *     None
+ *
+ * Return:
+ *     object: DOM reference map.
+ */
+const DOM = {
+    jarPickerPanel: document.getElementById("jarPickerPanel"),
+    jarPickerList: document.getElementById("jarPickerList"),
+    createJarButton: document.getElementById("createJarButton"),
+    completedIdeasButton: document.getElementById("completedIdeasButton"),
 
-const taskPanelTitle = document.getElementById("taskPanelTitle");
-const taskList = document.getElementById("taskList");
+    jarPanel: document.getElementById("jarPanel"),
+    jarPanelTitle: document.getElementById("jarPanelTitle"),
+    jarMessage: document.getElementById("jarMessage"),
+    pickButton: document.getElementById("pickButton"),
+    createIdeaButton: document.getElementById("createIdeaButton"),
+    jarExploreJarsButton: document.getElementById("jarExploreJarsButton"),
 
-const subtaskPanelTitle = document.getElementById("subtaskPanelTitle");
-const subtaskList = document.getElementById("subtaskList");
+    taskPanel: document.getElementById("taskPanel"),
+    taskPanelTitle: document.getElementById("taskPanelTitle"),
+    taskList: document.getElementById("taskList"),
 
-const completedCount = document.getElementById("completedCount");
-const completedList = document.getElementById("completedList");
+    subtaskPanel: document.getElementById("subtaskPanel"),
+    subtaskPanelTitle: document.getElementById("subtaskPanelTitle"),
+    subtaskList: document.getElementById("subtaskList"),
 
-const messagePopup = document.getElementById("messagePopup");
-const messageText = document.getElementById("messageText");
+    completedJarPanel: document.getElementById("completedJarPanel"),
+    completedJarTitle: document.getElementById("completedJarTitle"),
+    completedJarCount: document.getElementById("completedJarCount"),
+    completedJarList: document.getElementById("completedJarList"),
 
-const jarControls = document.getElementById("jarControls");
-const jarTagFilter = document.getElementById("jarTagFilter");
-const projectTagsList = document.getElementById("projectTagsList");
-const subtaskProjectTagsList = document.getElementById("subtaskProjectTagsList");
-const editTagsButton = document.getElementById("editTagsButton");
+    completedAllPanel: document.getElementById("completedAllPanel"),
+    completedAllCount: document.getElementById("completedAllCount"),
+    completedAllList: document.getElementById("completedAllList"),
 
-let currentSubtaskTaskIndex = null;
-let availableTagsCache = [];
-let selectedJarTag = "";
-let messageTimeout = null;
+    tasksTab: document.getElementById("tasksTab"),
+    completedTab: document.getElementById("completedTab"),
+    createIdeaTopButton: document.getElementById("createIdeaTopButton"),
+    exploreJarsButton: document.getElementById("exploreJarsButton"),
 
-function resizeToElement(element, extraWidth = 40, extraHeight = 70, minWidth = 240, minHeight = 240) {
+    subtasksBackButton: document.getElementById("subtasksBackButton"),
+    randomTaskButton: document.getElementById("randomTaskButton"),
+    randomSubtaskButton: document.getElementById("randomSubtaskButton"),
+    createTaskButton: document.getElementById("createTaskButton"),
+
+    completedJarBackButton: document.getElementById("completedJarBackButton"),
+    completedAllBackButton: document.getElementById("completedAllBackButton"),
+    closeButton: document.getElementById("closeButton"),
+
+    messagePopup: document.getElementById("messagePopup"),
+    messageText: document.getElementById("messageText")
+};
+
+console.log("[IdeaJar] DOM refs:", DOM);
+
+/* =========================
+   SHARED FRONTEND STATE
+========================= */
+
+/**
+ * Purpose:
+ *     Hold shared UI state between renders.
+ *
+ * Parameters:
+ *     None
+ *
+ * Return:
+ *     object: Mutable frontend state.
+ */
+const STATE = {
+    currentJarSlug: "",
+    currentTaskIndex: null,
+    currentMode: "",
+    currentProjectName: "",
+    messageTimeout: null
+};
+
+/* =========================
+   GENERAL HELPERS
+========================= */
+
+/**
+ * Purpose:
+ *     Print debug logs with a consistent prefix.
+ *
+ * Parameters:
+ *     ...args (any): Values to log.
+ *
+ * Return:
+ *     None
+ */
+function debugLog(...args) {
+    console.log("[IdeaJar]", ...args);
+}
+
+/**
+ * Purpose:
+ *     Print debug errors with a consistent prefix.
+ *
+ * Parameters:
+ *     ...args (any): Values to log.
+ *
+ * Return:
+ *     None
+ */
+function debugError(...args) {
+    console.error("[IdeaJar]", ...args);
+}
+
+/**
+ * Purpose:
+ *     Resize the pywebview window around a target element.
+ *
+ * Parameters:
+ *     element (HTMLElement): The element to size around.
+ *     extraWidth (number): Extra width padding.
+ *     extraHeight (number): Extra height padding.
+ *     minWidth (number): Minimum width.
+ *     minHeight (number): Minimum height.
+ *
+ * Return:
+ *     None
+ */
+function resizeToElement(element, extraWidth = 40, extraHeight = 70, minWidth = 260, minHeight = 270) {
+    if (!element) {
+        debugError("resizeToElement called with missing element");
+        return;
+    }
+
+    if (!window.pywebview?.api?.resize_window) {
+        debugError("pywebview resize_window API missing");
+        return;
+    }
+
     const width = Math.max(minWidth, Math.ceil(element.offsetWidth + extraWidth));
     const height = Math.max(minHeight, Math.ceil(element.offsetHeight + extraHeight));
+
+    debugLog("Resizing window", { width, height });
     window.pywebview.api.resize_window(width, height);
 }
 
+/**
+ * Purpose:
+ *     Hide all main content panels.
+ *
+ * Parameters:
+ *     None
+ *
+ * Return:
+ *     None
+ */
 function hideAllPanels() {
-    taskPanel.classList.add("hidden");
-    subtaskPanel.classList.add("hidden");
-    completedPanel.classList.add("hidden");
+    [
+        DOM.jarPickerPanel,
+        DOM.jarPanel,
+        DOM.taskPanel,
+        DOM.subtaskPanel,
+        DOM.completedJarPanel,
+        DOM.completedAllPanel
+    ].forEach((panel) => {
+        if (panel) {
+            panel.classList.add("hidden");
+        }
+    });
 }
 
+/**
+ * Purpose:
+ *     Hide the floating message popup.
+ *
+ * Parameters:
+ *     None
+ *
+ * Return:
+ *     None
+ */
 function hideMessage() {
-    messagePopup.classList.add("hidden");
-    messageText.textContent = "";
+    if (DOM.messagePopup) {
+        DOM.messagePopup.classList.add("hidden");
+    }
 
-    if (messageTimeout) {
-        clearTimeout(messageTimeout);
-        messageTimeout = null;
+    if (DOM.messageText) {
+        DOM.messageText.textContent = "";
+    }
+
+    if (STATE.messageTimeout) {
+        clearTimeout(STATE.messageTimeout);
+        STATE.messageTimeout = null;
     }
 }
 
+/**
+ * Purpose:
+ *     Show the floating message popup with temporary text.
+ *
+ * Parameters:
+ *     text (string): Message text.
+ *
+ * Return:
+ *     None
+ */
 function showMessage(text) {
-    if (!text) return;
+    if (!text || !DOM.messagePopup || !DOM.messageText) return;
 
-    messageText.textContent = text;
-    messagePopup.classList.remove("hidden");
+    debugLog("Message:", text);
 
-    if (messageTimeout) {
-        clearTimeout(messageTimeout);
+    DOM.messageText.textContent = text;
+    DOM.messagePopup.classList.remove("hidden");
+
+    if (STATE.messageTimeout) {
+        clearTimeout(STATE.messageTimeout);
     }
 
-    messageTimeout = setTimeout(() => {
+    STATE.messageTimeout = setTimeout(() => {
         hideMessage();
     }, 10000);
 }
 
-function normalizeTag(tag) {
-    if (tag === null || tag === undefined) return "";
-    let value = String(tag).trim().toLowerCase();
-    if (!value) return "";
-    if (!value.startsWith("#")) {
-        value = `#${value}`;
-    }
-    return value;
+/**
+ * Purpose:
+ *     Normalize freeform user text into a trimmed string.
+ *
+ * Parameters:
+ *     value (any): Input value.
+ *
+ * Return:
+ *     string: Trimmed string.
+ */
+function normalizeText(value) {
+    return String(value ?? "").trim();
 }
 
-function parseTagsInput(rawText) {
-    if (!rawText || !rawText.trim()) {
-        return [];
-    }
+/**
+ * Purpose:
+ *     Prompt for a non-empty string.
+ *
+ * Parameters:
+ *     message (string): Prompt message.
+ *     defaultValue (string): Default prompt value.
+ *
+ * Return:
+ *     string | null: Cleaned text or null.
+ */
+function promptNonEmpty(message, defaultValue = "") {
+    const raw = prompt(message, defaultValue);
+    if (raw === null) return null;
 
-    const parts = rawText
-        .split(",")
-        .map((tag) => normalizeTag(tag))
-        .filter(Boolean);
+    const cleaned = normalizeText(raw);
+    if (!cleaned) return null;
 
-    return [...new Set(parts)];
+    return cleaned;
 }
 
-function tagsToPromptText(tags) {
-    return (tags || []).join(", ");
-}
+/**
+ * Purpose:
+ *     Create a text button element.
+ *
+ * Parameters:
+ *     text (string): Button label.
+ *     className (string): CSS class string.
+ *     ariaLabel (string): Accessible label.
+ *
+ * Return:
+ *     HTMLButtonElement: Created button.
+ */
+function createTextButton(text, className = "", ariaLabel = "") {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = text;
 
-function updateAvailableTags(tags) {
-    availableTagsCache = Array.isArray(tags) ? [...tags] : [];
-
-    const previousValue = selectedJarTag || jarTagFilter.value || "";
-
-    jarTagFilter.innerHTML = "";
-
-    const allOption = document.createElement("option");
-    allOption.value = "";
-    allOption.textContent = "All Ideas";
-    jarTagFilter.appendChild(allOption);
-
-    availableTagsCache.forEach((tag) => {
-        const option = document.createElement("option");
-        option.value = tag;
-        option.textContent = tag;
-        jarTagFilter.appendChild(option);
-    });
-
-    if (availableTagsCache.includes(previousValue)) {
-        jarTagFilter.value = previousValue;
-        selectedJarTag = previousValue;
-    } else {
-        jarTagFilter.value = "";
-        selectedJarTag = "";
-    }
-}
-
-async function refreshJarTagsFromBackend() {
-    try {
-        const tagResponse = await window.pywebview.api.get_available_tags();
-        const registryTags = Array.isArray(tagResponse?.tags) ? tagResponse.tags : [];
-        const validTags = [];
-
-        for (const rawTag of registryTags) {
-            const tag = normalizeTag(rawTag);
-            if (!tag) continue;
-
-            try {
-                const result = await window.pywebview.api.get_ideas_by_tag(tag);
-                if (result && result.count > 0) {
-                    validTags.push(tag);
-                }
-            } catch (error) {
-                console.error(`Failed checking tag ${tag}:`, error);
-            }
-        }
-
-        updateAvailableTags(validTags);
-    } catch (error) {
-        console.error("Failed to refresh tags:", error);
-        updateAvailableTags([]);
-    }
-}
-
-function renderTagList(container, tags) {
-    container.innerHTML = "";
-
-    if (!tags || tags.length === 0) {
-        const empty = document.createElement("div");
-        empty.className = "tagEmpty";
-        empty.textContent = "No tags";
-        container.appendChild(empty);
-        return;
+    if (className) {
+        button.className = className;
     }
 
-    tags.forEach((tag) => {
-        const chip = document.createElement("span");
-        chip.className = "tagChip";
-        chip.textContent = tag;
-        container.appendChild(chip);
-    });
-}
-
-function showJarModeLayout() {
-    hideAllPanels();
-
-    pickButton.classList.remove("hidden");
-    pickButton.classList.remove("disabled");
-    createIdeaButton.classList.remove("hidden");
-    jarControls.classList.remove("hidden");
-}
-
-async function showJarMode(state = {}) {
-    showJarModeLayout();
-
-    await refreshJarTagsFromBackend();
-
-    setTimeout(() => {
-        resizeToElement(document.querySelector(".jarContainer"), 30, 30, 260, 270);
-    }, 10);
-
-    if (state.message) {
-        showMessage(state.message);
+    if (ariaLabel) {
+        button.setAttribute("aria-label", ariaLabel);
     }
+
+    return button;
 }
 
+/**
+ * Purpose:
+ *     Create a checkbox-style button.
+ *
+ * Parameters:
+ *     isChecked (boolean): Whether the box is checked.
+ *     ariaLabel (string): Accessible label.
+ *
+ * Return:
+ *     HTMLButtonElement: Created checkbox button.
+ */
 function createCheckbox(isChecked = false, ariaLabel = "Checkbox") {
     const checkbox = document.createElement("button");
     checkbox.className = "checkbox";
@@ -215,35 +332,266 @@ function createCheckbox(isChecked = false, ariaLabel = "Checkbox") {
     return checkbox;
 }
 
+/**
+ * Purpose:
+ *     Create a delete button.
+ *
+ * Parameters:
+ *     ariaLabel (string): Accessible label.
+ *
+ * Return:
+ *     HTMLButtonElement: Created delete button.
+ */
 function createDeleteButton(ariaLabel = "Delete") {
-    const deleteButton = document.createElement("button");
-    deleteButton.className = "deleteButton";
-    deleteButton.type = "button";
-    deleteButton.setAttribute("aria-label", ariaLabel);
-    return deleteButton;
+    const button = document.createElement("button");
+    button.className = "deleteButton";
+    button.type = "button";
+    button.setAttribute("aria-label", ariaLabel);
+    button.textContent = "✕";
+    return button;
 }
 
-function createTaskToggleButton(isDone, labelText) {
-    const checkbox = createCheckbox(isDone, labelText);
+/* =========================
+   INPUT FLOWS
+========================= */
 
-    checkbox.addEventListener("click", async (event) => {
-        event.stopPropagation();
-    });
-
-    return checkbox;
+/**
+ * Purpose:
+ *     Prompt the user for a new jar name.
+ *
+ * Parameters:
+ *     None
+ *
+ * Return:
+ *     Promise<string | null>: Jar name or null.
+ */
+async function promptForJarName() {
+    return promptNonEmpty("Jar name?");
 }
 
-function showTaskPanel(state) {
+/**
+ * Purpose:
+ *     Prompt the user for a new idea plus its initial tasks/subtasks.
+ *
+ * Parameters:
+ *     None
+ *
+ * Return:
+ *     Promise<object | null>:
+ *         { projectName, tasks } or null.
+ */
+async function promptForIdeaData() {
+    const projectName = promptNonEmpty("Project Name?");
+    if (!projectName) return null;
+
+    const tasks = [];
+
+    while (true) {
+        const taskName = promptNonEmpty("Add Task");
+        if (!taskName) break;
+
+        const subtasks = [];
+
+        while (true) {
+            const subtaskName = promptNonEmpty(`Subtasks for "${taskName}" (Cancel to finish subtasks)`);
+            if (!subtaskName) break;
+            subtasks.push(subtaskName);
+        }
+
+        if (subtasks.length === 0) {
+            showMessage(`Task "${taskName}" needs at least 1 subtask`);
+            return null;
+        }
+
+        tasks.push({
+            name: taskName,
+            subtasks
+        });
+    }
+
+    if (tasks.length === 0) {
+        showMessage("You need at least 1 task");
+        return null;
+    }
+
+    return {
+        projectName,
+        tasks
+    };
+}
+
+/**
+ * Purpose:
+ *     Prompt the user for a new task plus its subtasks.
+ *
+ * Parameters:
+ *     None
+ *
+ * Return:
+ *     Promise<object | null>:
+ *         { taskName, subtasks } or null.
+ */
+async function promptForTaskData() {
+    const taskName = promptNonEmpty("Task name?");
+    if (!taskName) return null;
+
+    const subtasks = [];
+
+    while (true) {
+        const subtaskName = promptNonEmpty(`Subtasks for "${taskName}" (Cancel to finish subtasks)`);
+        if (!subtaskName) break;
+        subtasks.push(subtaskName);
+    }
+
+    if (subtasks.length === 0) {
+        showMessage("A task needs at least 1 subtask");
+        return null;
+    }
+
+    return {
+        taskName,
+        subtasks
+    };
+}
+
+/* =========================
+   PANEL RENDERERS
+========================= */
+
+/**
+ * Purpose:
+ *     Render the jar picker screen.
+ *
+ * Parameters:
+ *     state (object): Backend state for jarPicker mode.
+ *
+ * Return:
+ *     None
+ */
+function showJarPickerPanel(state) {
+    debugLog("Rendering jarPicker", state);
+
     hideAllPanels();
 
-    pickButton.classList.add("hidden");
-    createIdeaButton.classList.add("hidden");
-    jarControls.classList.add("hidden");
+    STATE.currentMode = "jarPicker";
+    STATE.currentJarSlug = "";
+    STATE.currentTaskIndex = null;
+    STATE.currentProjectName = "";
 
-    taskPanel.classList.remove("hidden");
-    taskPanelTitle.textContent = state.projectName || "Project";
-    taskList.innerHTML = "";
-    renderTagList(projectTagsList, state.tags || []);
+    if (!DOM.jarPickerPanel || !DOM.jarPickerList) {
+        debugError("jarPickerPanel or jarPickerList missing");
+        return;
+    }
+
+    DOM.jarPickerPanel.classList.remove("hidden");
+    DOM.jarPickerList.innerHTML = "";
+
+    (state.jars || []).forEach((jar) => {
+        const item = document.createElement("div");
+        item.className = "jarPickerItem";
+
+        const openButton = createTextButton(
+            `${jar.name} (${jar.ideasCount} ideas / ${jar.inProgressCount} active / ${jar.completedCount} completed)`,
+            "jarPickerButton",
+            `Open jar ${jar.name}`
+        );
+
+        openButton.addEventListener("click", async () => {
+            debugLog("Opening jar", jar.slug);
+            const newState = await window.pywebview.api.open_jar(jar.slug);
+            await handleState(newState);
+        });
+
+        item.appendChild(openButton);
+        DOM.jarPickerList.appendChild(item);
+    });
+
+    setTimeout(() => {
+        resizeToElement(DOM.jarPickerPanel, 40, 55, 360, 260);
+    }, 10);
+
+    if (state.message) {
+        showMessage(state.message);
+    }
+}
+
+/**
+ * Purpose:
+ *     Render the jar screen for a selected jar.
+ *
+ * Parameters:
+ *     state (object): Backend state for jar mode.
+ *
+ * Return:
+ *     None
+ */
+function showJarPanel(state) {
+    debugLog("Rendering jar", state);
+
+    hideAllPanels();
+
+    STATE.currentMode = "jar";
+    STATE.currentJarSlug = state.jarSlug || "";
+    STATE.currentTaskIndex = null;
+    STATE.currentProjectName = "";
+
+    if (!DOM.jarPanel) {
+        debugError("jarPanel missing");
+        return;
+    }
+
+    DOM.jarPanel.classList.remove("hidden");
+
+    if (DOM.jarPanelTitle) {
+        DOM.jarPanelTitle.textContent = state.jarName || "Jar";
+    }
+
+    if (DOM.jarMessage) {
+        DOM.jarMessage.textContent = state.ideasCount > 0
+            ? `${state.ideasCount} idea(s) available`
+            : "There are no ideas";
+    }
+
+    setTimeout(() => {
+        resizeToElement(DOM.jarPanel, 40, 55, 320, 240);
+    }, 10);
+
+    if (state.message) {
+        showMessage(state.message);
+    }
+}
+
+/**
+ * Purpose:
+ *     Render the active project task screen.
+ *
+ * Parameters:
+ *     state (object): Backend state for tasks mode.
+ *
+ * Return:
+ *     None
+ */
+function showTaskPanel(state) {
+    debugLog("Rendering tasks", state);
+
+    hideAllPanels();
+
+    STATE.currentMode = "tasks";
+    STATE.currentJarSlug = state.jarSlug || "";
+    STATE.currentTaskIndex = null;
+    STATE.currentProjectName = state.projectName || "";
+
+    if (!DOM.taskPanel || !DOM.taskList) {
+        debugError("taskPanel or taskList missing");
+        return;
+    }
+
+    DOM.taskPanel.classList.remove("hidden");
+    DOM.taskList.innerHTML = "";
+
+    if (DOM.taskPanelTitle) {
+        DOM.taskPanelTitle.textContent = state.projectName || "Project";
+    }
 
     (state.tasks || []).forEach((task, taskIndex) => {
         const taskItem = document.createElement("div");
@@ -252,53 +600,57 @@ function showTaskPanel(state) {
         const row = document.createElement("div");
         row.className = "taskRow";
 
-        const statusButton = createTaskToggleButton(task.done, `Task status for ${task.name}`);
-
-        if (state.highlightTask && state.highlightTask === task.name) {
-            statusButton.classList.add("highlighted");
-        }
-
-        statusButton.addEventListener("click", async () => {
-            const newState = await window.pywebview.api.toggle_task(taskIndex);
+        const checkbox = createCheckbox(task.done, `Toggle task ${task.name}`);
+        checkbox.addEventListener("click", async () => {
+            debugLog("Toggling task", { jarSlug: state.jarSlug, taskIndex });
+            const newState = await window.pywebview.api.toggle_task(state.jarSlug, taskIndex);
             await handleState(newState);
         });
 
-        const openButton = document.createElement("button");
-        openButton.className = "taskButton";
-        openButton.type = "button";
-        openButton.textContent = task.name;
-
+        const openButton = createTextButton(task.name, "taskButton", `Open task ${task.name}`);
         if (task.done) {
             openButton.classList.add("doneText");
         }
 
-        if (state.highlightTask && state.highlightTask === task.name) {
-            openButton.classList.add("highlighted");
+        openButton.addEventListener("click", async () => {
+            debugLog("Opening task", { jarSlug: state.jarSlug, taskIndex });
+            const newState = await window.pywebview.api.open_task(state.jarSlug, taskIndex);
+            await handleState(newState);
+        });
+
+        const renameButton = createTextButton("Rename", "renameButton", `Rename task ${task.name}`);
+        renameButton.addEventListener("click", async () => {
+            const newName = promptNonEmpty("Rename task", task.name);
+            if (!newName) return;
+
+            debugLog("Renaming task", { jarSlug: state.jarSlug, taskIndex, newName });
+            const newState = await window.pywebview.api.rename_task(state.jarSlug, taskIndex, newName);
+            await handleState(newState);
+        });
+
+        row.appendChild(checkbox);
+        row.appendChild(openButton);
+        row.appendChild(renameButton);
+
+        if ((state.tasks || []).length > 1) {
+            const deleteButton = createDeleteButton(`Delete task ${task.name}`);
+            deleteButton.addEventListener("click", async () => {
+                if (!confirm("Delete this task?")) return;
+
+                debugLog("Deleting task", { jarSlug: state.jarSlug, taskIndex });
+                const newState = await window.pywebview.api.delete_task(state.jarSlug, taskIndex);
+                await handleState(newState);
+            });
+
+            row.appendChild(deleteButton);
         }
 
-        openButton.addEventListener("click", async () => {
-            const newState = await window.pywebview.api.open_task(taskIndex);
-            await handleState(newState);
-        });
-
-        const deleteButton = createDeleteButton(`Delete task ${task.name}`);
-
-        deleteButton.addEventListener("click", async () => {
-            if (!confirm("Delete this task?")) return;
-            const newState = await window.pywebview.api.delete_task(taskIndex);
-            await handleState(newState);
-        });
-
-        row.appendChild(statusButton);
-        row.appendChild(openButton);
-        row.appendChild(deleteButton);
-
         taskItem.appendChild(row);
-        taskList.appendChild(taskItem);
+        DOM.taskList.appendChild(taskItem);
     });
 
     setTimeout(() => {
-        resizeToElement(taskPanel, 40, 55, 340, 220);
+        resizeToElement(DOM.taskPanel, 40, 55, 420, 260);
     }, 10);
 
     if (state.message) {
@@ -306,18 +658,37 @@ function showTaskPanel(state) {
     }
 }
 
+/**
+ * Purpose:
+ *     Render the subtasks screen for a selected task.
+ *
+ * Parameters:
+ *     state (object): Backend state for subtasks mode.
+ *
+ * Return:
+ *     None
+ */
 function showSubtaskPanel(state) {
+    debugLog("Rendering subtasks", state);
+
     hideAllPanels();
 
-    pickButton.classList.add("hidden");
-    createIdeaButton.classList.add("hidden");
-    jarControls.classList.add("hidden");
+    STATE.currentMode = "subtasks";
+    STATE.currentJarSlug = state.jarSlug || "";
+    STATE.currentTaskIndex = state.taskIndex ?? null;
+    STATE.currentProjectName = state.projectName || "";
 
-    subtaskPanel.classList.remove("hidden");
-    subtaskPanelTitle.textContent = state.taskName || "Subtasks";
-    subtaskList.innerHTML = "";
-    currentSubtaskTaskIndex = state.taskIndex;
-    renderTagList(subtaskProjectTagsList, state.tags || []);
+    if (!DOM.subtaskPanel || !DOM.subtaskList) {
+        debugError("subtaskPanel or subtaskList missing");
+        return;
+    }
+
+    DOM.subtaskPanel.classList.remove("hidden");
+    DOM.subtaskList.innerHTML = "";
+
+    if (DOM.subtaskPanelTitle) {
+        DOM.subtaskPanelTitle.textContent = state.taskName || "Subtasks";
+    }
 
     (state.subtasks || []).forEach((subtask, subtaskIndex) => {
         const subtaskItem = document.createElement("div");
@@ -327,61 +698,105 @@ function showSubtaskPanel(state) {
         row.className = "taskRow";
 
         const checkbox = createCheckbox(subtask.done, `Toggle subtask ${subtask.name}`);
-
         if (state.highlightSubtask && state.highlightSubtask === subtask.name) {
             checkbox.classList.add("highlighted");
         }
 
         checkbox.addEventListener("click", async () => {
+            debugLog("Toggling subtask", {
+                jarSlug: state.jarSlug,
+                taskIndex: state.taskIndex,
+                subtaskIndex
+            });
+
             const newState = await window.pywebview.api.toggle_subtask(
+                state.jarSlug,
                 state.taskIndex,
                 subtaskIndex
             );
+
             await handleState(newState);
         });
 
-        const subtaskButton = document.createElement("button");
-        subtaskButton.className = "taskButton";
-        subtaskButton.type = "button";
-        subtaskButton.textContent = subtask.name;
-
+        const nameButton = createTextButton(subtask.name, "taskButton", `Toggle subtask ${subtask.name}`);
         if (subtask.done) {
-            subtaskButton.classList.add("doneText");
+            nameButton.classList.add("doneText");
         }
-
         if (state.highlightSubtask && state.highlightSubtask === subtask.name) {
-            subtaskButton.classList.add("highlighted");
+            nameButton.classList.add("highlighted");
         }
 
-        subtaskButton.addEventListener("click", async () => {
+        nameButton.addEventListener("click", async () => {
+            debugLog("Toggling subtask through text button", {
+                jarSlug: state.jarSlug,
+                taskIndex: state.taskIndex,
+                subtaskIndex
+            });
+
             const newState = await window.pywebview.api.toggle_subtask(
+                state.jarSlug,
                 state.taskIndex,
                 subtaskIndex
             );
+
             await handleState(newState);
         });
 
-        const deleteButton = createDeleteButton(`Delete subtask ${subtask.name}`);
+        const renameButton = createTextButton("Rename", "renameButton", `Rename subtask ${subtask.name}`);
+        renameButton.addEventListener("click", async () => {
+            const newName = promptNonEmpty("Rename subtask", subtask.name);
+            if (!newName) return;
 
-        deleteButton.addEventListener("click", async () => {
-            if (!confirm("Delete this subtask?")) return;
-            const newState = await window.pywebview.api.delete_subtask(
+            debugLog("Renaming subtask", {
+                jarSlug: state.jarSlug,
+                taskIndex: state.taskIndex,
+                subtaskIndex,
+                newName
+            });
+
+            const newState = await window.pywebview.api.rename_subtask(
+                state.jarSlug,
                 state.taskIndex,
-                subtaskIndex
+                subtaskIndex,
+                newName
             );
+
             await handleState(newState);
         });
 
         row.appendChild(checkbox);
-        row.appendChild(subtaskButton);
-        row.appendChild(deleteButton);
+        row.appendChild(nameButton);
+        row.appendChild(renameButton);
+
+        if ((state.subtasks || []).length > 1) {
+            const deleteButton = createDeleteButton(`Delete subtask ${subtask.name}`);
+            deleteButton.addEventListener("click", async () => {
+                if (!confirm("Delete this subtask?")) return;
+
+                debugLog("Deleting subtask", {
+                    jarSlug: state.jarSlug,
+                    taskIndex: state.taskIndex,
+                    subtaskIndex
+                });
+
+                const newState = await window.pywebview.api.delete_subtask(
+                    state.jarSlug,
+                    state.taskIndex,
+                    subtaskIndex
+                );
+
+                await handleState(newState);
+            });
+
+            row.appendChild(deleteButton);
+        }
 
         subtaskItem.appendChild(row);
-        subtaskList.appendChild(subtaskItem);
+        DOM.subtaskList.appendChild(subtaskItem);
     });
 
     setTimeout(() => {
-        resizeToElement(subtaskPanel, 40, 55, 340, 220);
+        resizeToElement(DOM.subtaskPanel, 40, 55, 420, 260);
     }, 10);
 
     if (state.message) {
@@ -389,16 +804,39 @@ function showSubtaskPanel(state) {
     }
 }
 
-function showCompletedPanel(state) {
+/**
+ * Purpose:
+ *     Render completed ideas for the current jar.
+ *
+ * Parameters:
+ *     state (object): Backend state for completedJar mode.
+ *
+ * Return:
+ *     None
+ */
+function showCompletedJarPanel(state) {
+    debugLog("Rendering completedJar", state);
+
     hideAllPanels();
 
-    pickButton.classList.add("hidden");
-    createIdeaButton.classList.add("hidden");
-    jarControls.classList.add("hidden");
+    STATE.currentMode = "completedJar";
+    STATE.currentJarSlug = state.jarSlug || "";
 
-    completedPanel.classList.remove("hidden");
-    completedCount.textContent = `Completed projects: ${state.count}`;
-    completedList.innerHTML = "";
+    if (!DOM.completedJarPanel || !DOM.completedJarList) {
+        debugError("completedJarPanel or completedJarList missing");
+        return;
+    }
+
+    DOM.completedJarPanel.classList.remove("hidden");
+    DOM.completedJarList.innerHTML = "";
+
+    if (DOM.completedJarTitle) {
+        DOM.completedJarTitle.textContent = state.jarName || "Completed";
+    }
+
+    if (DOM.completedJarCount) {
+        DOM.completedJarCount.textContent = `Completed ideas: ${state.count || 0}`;
+    }
 
     (state.projects || []).forEach((project) => {
         const item = document.createElement("div");
@@ -408,18 +846,12 @@ function showCompletedPanel(state) {
         title.className = "completedProjectName";
         title.textContent = project.name || "Untitled";
 
-        const tags = document.createElement("div");
-        tags.className = "completedProjectTags";
-        renderTagList(tags, project.tags || []);
-
         item.appendChild(title);
-        item.appendChild(tags);
-
-        completedList.appendChild(item);
+        DOM.completedJarList.appendChild(item);
     });
 
     setTimeout(() => {
-        resizeToElement(completedPanel, 40, 55, 340, 220);
+        resizeToElement(DOM.completedJarPanel, 40, 55, 380, 250);
     }, 10);
 
     if (state.message) {
@@ -427,11 +859,81 @@ function showCompletedPanel(state) {
     }
 }
 
+/**
+ * Purpose:
+ *     Render completed ideas across all jars.
+ *
+ * Parameters:
+ *     state (object): Backend state for completedAll mode.
+ *
+ * Return:
+ *     None
+ */
+function showCompletedAllPanel(state) {
+    debugLog("Rendering completedAll", state);
+
+    hideAllPanels();
+
+    STATE.currentMode = "completedAll";
+
+    if (!DOM.completedAllPanel || !DOM.completedAllList) {
+        debugError("completedAllPanel or completedAllList missing");
+        return;
+    }
+
+    DOM.completedAllPanel.classList.remove("hidden");
+    DOM.completedAllList.innerHTML = "";
+
+    if (DOM.completedAllCount) {
+        DOM.completedAllCount.textContent = `Completed ideas: ${state.count || 0}`;
+    }
+
+    (state.projects || []).forEach((project) => {
+        const item = document.createElement("div");
+        item.className = "taskItem";
+
+        const title = document.createElement("div");
+        title.className = "completedProjectName";
+        title.textContent = `${project.name || "Untitled"} — ${project.jarName || "Unknown Jar"}`;
+
+        item.appendChild(title);
+        DOM.completedAllList.appendChild(item);
+    });
+
+    setTimeout(() => {
+        resizeToElement(DOM.completedAllPanel, 40, 55, 420, 260);
+    }, 10);
+
+    if (state.message) {
+        showMessage(state.message);
+    }
+}
+
+/**
+ * Purpose:
+ *     Route backend state into the correct UI renderer.
+ *
+ * Parameters:
+ *     state (object): Backend state object.
+ *
+ * Return:
+ *     Promise<void>
+ */
 async function handleState(state) {
-    if (!state) return;
+    debugLog("handleState called", state);
+
+    if (!state) {
+        debugError("handleState received empty state");
+        return;
+    }
+
+    if (state.mode === "jarPicker") {
+        showJarPickerPanel(state);
+        return;
+    }
 
     if (state.mode === "jar") {
-        await showJarMode(state);
+        showJarPanel(state);
         return;
     }
 
@@ -445,179 +947,237 @@ async function handleState(state) {
         return;
     }
 
-    if (state.mode === "completed") {
-        showCompletedPanel(state);
+    if (state.mode === "completedJar") {
+        showCompletedJarPanel(state);
+        return;
     }
+
+    if (state.mode === "completedAll") {
+        showCompletedAllPanel(state);
+        return;
+    }
+
+    debugError("Unknown state mode:", state.mode, state);
 }
 
-pickButton.addEventListener("click", async () => {
-    const chosenTag = normalizeTag(jarTagFilter.value);
-    selectedJarTag = chosenTag;
+/* =========================
+   EVENT WIRING
+========================= */
 
-    const state = chosenTag
-        ? await window.pywebview.api.pick_idea(chosenTag)
-        : await window.pywebview.api.pick_idea();
+/**
+ * Purpose:
+ *     Attach all event listeners safely.
+ *
+ * Parameters:
+ *     None
+ *
+ * Return:
+ *     None
+ */
+function bindEvents() {
+    debugLog("Binding events");
 
-    await handleState(state);
-});
+    DOM.createJarButton?.addEventListener("click", async () => {
+        const jarName = await promptForJarName();
+        if (!jarName) return;
 
-jarTagFilter.addEventListener("change", () => {
-    selectedJarTag = normalizeTag(jarTagFilter.value);
-});
+        debugLog("Creating jar", jarName);
+        const result = await window.pywebview.api.create_jar(jarName);
 
-createIdeaButton.addEventListener("click", async () => {
-    const projectName = prompt("Project Name?");
-    if (!projectName || !projectName.trim()) return;
-
-    const tagInput = prompt(
-        "Project tags? Use commas.\nExample: #game, #personal",
-        ""
-    );
-
-    const tags = parseTagsInput(tagInput || "");
-    const tasks = [];
-
-    while (true) {
-        const taskName = prompt("Add Task");
-        if (!taskName || !taskName.trim()) break;
-
-        const subtasks = [];
-        while (true) {
-            const subtaskName = prompt(`Subtasks for "${taskName}" (Cancel to finish subtasks)`);
-            if (!subtaskName || !subtaskName.trim()) break;
-            subtasks.push(subtaskName.trim());
+        if (result?.message) {
+            showMessage(result.message);
         }
 
-        if (subtasks.length === 0) {
-            showMessage(`Task "${taskName.trim()}" needs at least 1 subtask`);
+        const state = await window.pywebview.api.get_startup_state();
+        await handleState(state);
+    });
+
+    DOM.completedIdeasButton?.addEventListener("click", async () => {
+        debugLog("Opening completed ideas across all jars");
+        const state = await window.pywebview.api.get_completed_all_projects();
+        await handleState(state);
+    });
+
+    DOM.pickButton?.addEventListener("click", async () => {
+        if (!STATE.currentJarSlug) return;
+
+        debugLog("Picking idea from jar", STATE.currentJarSlug);
+        const state = await window.pywebview.api.pick_idea(STATE.currentJarSlug);
+        await handleState(state);
+    });
+
+    DOM.createIdeaButton?.addEventListener("click", async () => {
+        if (!STATE.currentJarSlug) return;
+
+        const data = await promptForIdeaData();
+        if (!data) return;
+
+        debugLog("Creating idea", data);
+        const result = await window.pywebview.api.create_project(
+            STATE.currentJarSlug,
+            data.projectName,
+            data.tasks
+        );
+
+        if (result?.message) {
+            showMessage(result.message);
+        }
+
+        const state = await window.pywebview.api.open_jar(STATE.currentJarSlug);
+        await handleState(state);
+    });
+
+    DOM.jarExploreJarsButton?.addEventListener("click", async () => {
+        debugLog("Exploring other jars from jar screen");
+        const state = await window.pywebview.api.get_jar_picker_state();
+        await handleState(state);
+    });
+
+    DOM.createIdeaTopButton?.addEventListener("click", async () => {
+        if (!STATE.currentJarSlug) return;
+
+        const data = await promptForIdeaData();
+        if (!data) return;
+
+        debugLog("Creating idea from top button", data);
+        const result = await window.pywebview.api.create_project(
+            STATE.currentJarSlug,
+            data.projectName,
+            data.tasks
+        );
+
+        if (result?.message) {
+            showMessage(result.message);
+        }
+
+        const state = await window.pywebview.api.open_jar(STATE.currentJarSlug);
+        await handleState(state);
+    });
+
+    DOM.createTaskButton?.addEventListener("click", async () => {
+        if (!STATE.currentJarSlug) return;
+
+        const data = await promptForTaskData();
+        if (!data) return;
+
+        debugLog("Creating task", data);
+        const state = await window.pywebview.api.create_task(
+            STATE.currentJarSlug,
+            data.taskName,
+            data.subtasks
+        );
+
+        await handleState(state);
+    });
+
+    DOM.randomTaskButton?.addEventListener("click", async () => {
+        if (!STATE.currentJarSlug) return;
+
+        debugLog("Picking random task", STATE.currentJarSlug);
+        const state = await window.pywebview.api.pick_random_task(STATE.currentJarSlug);
+        await handleState(state);
+    });
+
+    DOM.randomSubtaskButton?.addEventListener("click", async () => {
+        if (!STATE.currentJarSlug || STATE.currentTaskIndex === null) return;
+
+        debugLog("Picking random subtask", {
+            jarSlug: STATE.currentJarSlug,
+            taskIndex: STATE.currentTaskIndex
+        });
+
+        const state = await window.pywebview.api.pick_random_subtask(
+            STATE.currentJarSlug,
+            STATE.currentTaskIndex
+        );
+
+        await handleState(state);
+    });
+
+    DOM.tasksTab?.addEventListener("click", async () => {
+        if (!STATE.currentJarSlug) return;
+
+        debugLog("Opening tasks tab", STATE.currentJarSlug);
+        const state = await window.pywebview.api.open_jar(STATE.currentJarSlug);
+        await handleState(state);
+    });
+
+    DOM.completedTab?.addEventListener("click", async () => {
+        if (!STATE.currentJarSlug) return;
+
+        debugLog("Opening completed tab for jar", STATE.currentJarSlug);
+        const state = await window.pywebview.api.get_completed_projects_for_jar(STATE.currentJarSlug);
+        await handleState(state);
+    });
+
+    DOM.exploreJarsButton?.addEventListener("click", async () => {
+        debugLog("Exploring other jars");
+        const state = await window.pywebview.api.get_jar_picker_state();
+        await handleState(state);
+    });
+
+    DOM.subtasksBackButton?.addEventListener("click", async () => {
+        if (!STATE.currentJarSlug) return;
+
+        debugLog("Returning from subtasks to jar open state", STATE.currentJarSlug);
+        const state = await window.pywebview.api.open_jar(STATE.currentJarSlug);
+        await handleState(state);
+    });
+
+    DOM.completedJarBackButton?.addEventListener("click", async () => {
+        if (!STATE.currentJarSlug) {
+            const state = await window.pywebview.api.get_startup_state();
+            await handleState(state);
             return;
         }
 
-        tasks.push({
-            name: taskName.trim(),
-            subtasks: subtasks
-        });
-    }
+        debugLog("Returning from completedJar to current jar", STATE.currentJarSlug);
+        const state = await window.pywebview.api.open_jar(STATE.currentJarSlug);
+        await handleState(state);
+    });
 
-    if (tasks.length === 0) {
-        showMessage("You need at least 1 task");
-        return;
-    }
+    DOM.completedAllBackButton?.addEventListener("click", async () => {
+        debugLog("Returning from completedAll to startup");
+        const state = await window.pywebview.api.get_startup_state();
+        await handleState(state);
+    });
 
-    for (const tag of tags) {
-        await window.pywebview.api.create_tag(tag);
-    }
+    DOM.closeButton?.addEventListener("click", async () => {
+        debugLog("Closing app");
+        await window.pywebview.api.close_app();
+    });
 
-    const response = await window.pywebview.api.create_project(projectName.trim(), tasks, tags);
+    DOM.messagePopup?.addEventListener("click", () => {
+        hideMessage();
+    });
+}
 
-    if (response.message) {
-        showMessage(response.message);
-    }
-
-    await refreshJarTagsFromBackend();
-
-    const startupState = await window.pywebview.api.get_startup_state();
-    await handleState(startupState);
-});
-
-createTaskButton.addEventListener("click", async () => {
-    const taskName = prompt("Task name?");
-    if (!taskName || !taskName.trim()) return;
-
-    const subtasks = [];
-    while (true) {
-        const subtaskName = prompt(`Subtasks for "${taskName}" (Cancel to finish subtasks)`);
-        if (!subtaskName || !subtaskName.trim()) break;
-        subtasks.push(subtaskName.trim());
-    }
-
-    if (subtasks.length === 0) {
-        showMessage("A task needs at least 1 subtask");
-        return;
-    }
-
-    const newState = await window.pywebview.api.create_task(taskName.trim(), subtasks);
-    await handleState(newState);
-});
-
-editTagsButton.addEventListener("click", async () => {
-    const currentTags = Array.from(projectTagsList.querySelectorAll(".tagChip")).map((chip) => chip.textContent);
-
-    const raw = prompt(
-        "Edit project tags. Use commas.\nExample: #game, #personal",
-        tagsToPromptText(currentTags)
-    );
-
-    if (raw === null) return;
-
-    const tags = parseTagsInput(raw);
-
-    for (const tag of tags) {
-        await window.pywebview.api.create_tag(tag);
-    }
-
-    const newState = await window.pywebview.api.update_project_tags(tags);
-    await refreshJarTagsFromBackend();
-    await handleState(newState);
-});
-
-randomTaskButton.addEventListener("click", async () => {
-    const state = await window.pywebview.api.pick_random_task();
-    await handleState(state);
-});
-
-randomSubtaskButton.addEventListener("click", async () => {
-    if (currentSubtaskTaskIndex === null) return;
-    const state = await window.pywebview.api.pick_random_subtask(currentSubtaskTaskIndex);
-    await handleState(state);
-});
-
-backButton.addEventListener("click", async () => {
-    const state = await window.pywebview.api.get_startup_state();
-    await handleState(state);
-});
-
-completedBackButton.addEventListener("click", async () => {
-    const state = await window.pywebview.api.get_startup_state();
-    await handleState(state);
-});
-
-closeButton.addEventListener("click", async () => {
-    await window.pywebview.api.close_app();
-});
-
-messagePopup.addEventListener("click", () => {
-    hideMessage();
-});
-
-tasksTab.addEventListener("click", async () => {
-    const state = await window.pywebview.api.get_startup_state();
-    await handleState(state);
-});
-
-completedTab.addEventListener("click", async () => {
-    const state = await window.pywebview.api.get_completed_projects();
-    await handleState(state);
-});
-
-subtasksTasksTab.addEventListener("click", async () => {
-    const state = await window.pywebview.api.get_startup_state();
-    await handleState(state);
-});
-
-subtasksCompletedTab.addEventListener("click", async () => {
-    const state = await window.pywebview.api.get_completed_projects();
-    await handleState(state);
-});
-
-completedTasksTab.addEventListener("click", async () => {
-    const state = await window.pywebview.api.get_startup_state();
-    await handleState(state);
-});
+/* =========================
+   STARTUP
+========================= */
 
 window.addEventListener("pywebviewready", async () => {
-    await refreshJarTagsFromBackend();
+    /**
+     * Purpose:
+     *     Start the frontend once pywebview is ready.
+     *
+     * Parameters:
+     *     None
+     *
+     * Return:
+     *     Promise<void>
+     */
+    debugLog("pywebviewready fired");
 
-    const startupState = await window.pywebview.api.get_startup_state();
-    await handleState(startupState);
+    try {
+        bindEvents();
+
+        const startupState = await window.pywebview.api.get_startup_state();
+        debugLog("Startup state received", startupState);
+
+        await handleState(startupState);
+    } catch (error) {
+        debugError("Startup failure", error);
+        showMessage(`Startup error: ${error}`);
+    }
 });

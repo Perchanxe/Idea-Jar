@@ -25,7 +25,29 @@ ZIP_PATH = BASE_DIR / "update.zip"
 
 
 class StatusPopup:
+    """
+    Purpose:
+        Show a small status window while the launcher checks for updates
+        and starts the main app.
+
+    Parameters:
+        None
+
+    Return:
+        StatusPopup: Popup controller instance.
+    """
+
     def __init__(self):
+        """
+        Purpose:
+            Create and configure the launcher status popup.
+
+        Parameters:
+            None
+
+        Return:
+            None
+        """
         self.root = tk.Tk()
         self.root.title("Idea Jar")
         self.root.geometry("300x100")
@@ -50,11 +72,31 @@ class StatusPopup:
         self.root.protocol("WM_DELETE_WINDOW", lambda: None)
 
     def set_status(self, text: str):
+        """
+        Purpose:
+            Update the popup label text and print the same status to stdout.
+
+        Parameters:
+            text (str): Status text to display.
+
+        Return:
+            None
+        """
         print(text, flush=True)
         self.label_var.set(text)
         self.root.update_idletasks()
 
     def close(self):
+        """
+        Purpose:
+            Close the popup window safely.
+
+        Parameters:
+            None
+
+        Return:
+            None
+        """
         try:
             self.root.destroy()
         except Exception:
@@ -62,19 +104,51 @@ class StatusPopup:
 
 
 def get_local_version():
+    """
+    Purpose:
+        Read the locally installed app version from version.txt.
+
+    Parameters:
+        None
+
+    Return:
+        str: Local version string, or '0.0.0' if missing.
+    """
     if VERSION_FILE.exists():
         version = VERSION_FILE.read_text(encoding="utf-8").strip()
         print(f"Local version: {version}", flush=True)
         return version
+
     print("Local version file missing, using 0.0.0", flush=True)
     return "0.0.0"
 
 
 def set_local_version(version):
+    """
+    Purpose:
+        Write the provided version string to version.txt.
+
+    Parameters:
+        version (str): Version string to save.
+
+    Return:
+        None
+    """
     VERSION_FILE.write_text(version, encoding="utf-8")
 
 
 def get_remote_version():
+    """
+    Purpose:
+        Fetch the remote version metadata JSON for the app update.
+
+    Parameters:
+        None
+
+    Return:
+        dict | None:
+            Parsed JSON metadata if successful, otherwise None.
+    """
     try:
         print(f"Fetching remote version from: {VERSION_URL}", flush=True)
 
@@ -96,7 +170,19 @@ def get_remote_version():
         print(f"Remote version check failed: {e}", flush=True)
         return None
 
+
 def download_file(url, dest):
+    """
+    Purpose:
+        Download a file from a URL to a destination path.
+
+    Parameters:
+        url (str): Source download URL.
+        dest (Path | str): Destination file path.
+
+    Return:
+        None
+    """
     print(f"Downloading file from: {url}", flush=True)
 
     req = urllib.request.Request(
@@ -114,6 +200,16 @@ def download_file(url, dest):
 
 
 def make_executable(path: Path):
+    """
+    Purpose:
+        Add executable permissions to a file on Unix-like systems.
+
+    Parameters:
+        path (Path): File path to mark executable.
+
+    Return:
+        None
+    """
     try:
         current_mode = path.stat().st_mode
         path.chmod(current_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
@@ -123,6 +219,17 @@ def make_executable(path: Path):
 
 
 def apply_update(zip_url, popup: StatusPopup):
+    """
+    Purpose:
+        Download and apply an app update from the provided zip URL.
+
+    Parameters:
+        zip_url (str): URL of the update zip file.
+        popup (StatusPopup): Popup instance used for status updates.
+
+    Return:
+        None
+    """
     popup.set_status("Updating...")
 
     if TEMP_DIR.exists():
@@ -170,6 +277,16 @@ def apply_update(zip_url, popup: StatusPopup):
 
 
 def launch_app(popup: StatusPopup):
+    """
+    Purpose:
+        Launch the main IdeaJar app binary and mark it as started by the launcher.
+
+    Parameters:
+        popup (StatusPopup): Popup instance used for status updates.
+
+    Return:
+        None
+    """
     print(f"Trying to launch app from: {APP_PATH}", flush=True)
 
     if not APP_PATH.exists():
@@ -193,6 +310,17 @@ def launch_app(popup: StatusPopup):
 
 
 def main_work(popup: StatusPopup):
+    """
+    Purpose:
+        Run the launcher workflow:
+        check for updates, apply update if needed, then launch the app.
+
+    Parameters:
+        popup (StatusPopup): Popup instance used for status updates.
+
+    Return:
+        None
+    """
     try:
         popup.set_status("Checking for update...")
 
@@ -223,6 +351,16 @@ def main_work(popup: StatusPopup):
 
 
 def main():
+    """
+    Purpose:
+        Start the launcher UI and background worker thread.
+
+    Parameters:
+        None
+
+    Return:
+        None
+    """
     print("Launcher started", flush=True)
     print(f"BASE_DIR: {BASE_DIR}", flush=True)
     print(f"APP_PATH: {APP_PATH}", flush=True)

@@ -35,66 +35,9 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-}
-
-
-/* =========================
-   Jar Controls
-========================= */
-
-#jarControls {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    margin-top: 24px;
-}
-
-#jarTagFilterRow {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-}
-
-#jarTagFilterLabel {
-    color: white;
-    font-size: 12px;
-    opacity: 0.95;
-}
-
-#jarTagFilter {
-    min-width: 150px;
-    max-width: 190px;
-    padding: 6px 8px;
-    border: none;
-    border-radius: 8px;
-    background: rgba(20, 20, 20, 0.92);
-    color: white;
-    cursor: pointer;
-}
-
-
-/* =========================
-   Jar
-========================= */
-
-#pickButton {
-    width: 180px;
-    height: 180px;
-    z-index: 5;
-    cursor: pointer;
-    user-select: none;
-    object-fit: contain;
-    image-rendering: pixelated;
-    -webkit-user-drag: none;
-}
-
-#pickButton.disabled {
-    opacity: 0.75;
-    cursor: default;
-    pointer-events: none;
+    gap: 8px;
+    min-width: 240px;
+    min-height: 240px;
 }
 
 
@@ -134,14 +77,113 @@ body {
 
 
 /* =========================
-   Primary Floating Button
+   Panels
 ========================= */
+
+#jarPickerPanel,
+#jarPanel,
+#taskPanel,
+#subtaskPanel,
+#completedJarPanel,
+#completedAllPanel {
+    position: relative;
+    z-index: 30;
+    width: 340px;
+    max-width: 340px;
+    max-height: 420px;
+    overflow-y: auto;
+    padding: 14px;
+    border-radius: 12px;
+    color: white;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+    background-image: url("Sprites/BG.png");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 100% 100%;
+    image-rendering: pixelated;
+    box-sizing: border-box;
+}
+
+.panelContent {
+    min-height: calc(100% - 24px);
+    padding: 12px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.5);
+    box-sizing: border-box;
+}
+
+.jarScreenContent {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.panelTitle {
+    margin: 0 0 12px 0;
+    text-align: center;
+    font-size: 18px;
+}
+
+
+/* =========================
+   Jar Picker
+========================= */
+
+#jarPickerList {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.jarPickerItem {
+    width: 100%;
+}
+
+.jarPickerButton {
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.10);
+    color: white;
+    text-align: left;
+    cursor: pointer;
+    box-sizing: border-box;
+}
+
+.jarPickerButton:hover {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+
+/* =========================
+   Jar Screen
+========================= */
+
+#jarMessage {
+    min-height: 18px;
+    text-align: center;
+    font-size: 14px;
+    opacity: 0.95;
+}
+
+#pickButton {
+    width: 180px;
+    height: 180px;
+    z-index: 5;
+    cursor: pointer;
+    user-select: none;
+    object-fit: contain;
+    image-rendering: pixelated;
+    -webkit-user-drag: none;
+}
 
 #createIdeaButton {
     position: static;
     z-index: 20;
-    margin-top: -6px;
-    padding: 6px 12px;
+    padding: 8px 14px;
     border: none;
     border-radius: 8px;
     background: rgba(20, 20, 20, 0.92);
@@ -156,45 +198,13 @@ body {
 
 
 /* =========================
-   Panels
-========================= */
-
-#taskPanel,
-#subtaskPanel,
-#completedPanel {
-    position: relative;
-    z-index: 30;
-    width: 320px;
-    max-width: 320px;
-    max-height: 360px;
-    overflow-y: auto;
-    padding: 14px;
-    border-radius: 12px;
-    color: white;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-    background-image: url("Sprites/BG.png");
-    background-repeat: no-repeat;
-    background-position: center;
-    background-size: 100% 100%;
-    image-rendering: pixelated;
-}
-
-.panelContent {
-    min-height: calc(100% - 24px);
-    padding: 12px;
-    border-radius: 10px;
-    background: rgba(0, 0, 0, 0.5);
-    box-sizing: border-box;
-}
-
-
-/* =========================
-   Tabs
+   Tabs / Top Buttons
 ========================= */
 
 .tabs {
     display: flex;
     justify-content: center;
+    flex-wrap: wrap;
     gap: 8px;
     margin-bottom: 10px;
 }
@@ -219,104 +229,13 @@ body {
 
 
 /* =========================
-   Titles / Text
-========================= */
-
-#taskPanelTitle,
-#subtaskPanelTitle,
-#completedPanelTitle {
-    margin: 0 0 12px 0;
-    text-align: center;
-    font-size: 18px;
-}
-
-#completedCount {
-    margin-bottom: 10px;
-    text-align: center;
-    opacity: 0.9;
-}
-
-
-/* =========================
-   Info Sections
-========================= */
-
-.infoSection {
-    margin-bottom: 12px;
-    padding: 8px;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.06);
-}
-
-.sectionHeader {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 8px;
-}
-
-.sectionTitle {
-    font-size: 13px;
-    font-weight: bold;
-    opacity: 0.95;
-}
-
-.smallButton {
-    padding: 5px 8px;
-    border: none;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.12);
-    color: white;
-    font-size: 12px;
-    cursor: pointer;
-}
-
-.smallButton:hover {
-    background: rgba(255, 255, 255, 0.18);
-}
-
-.tagList {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-
-.tagChip {
-    display: inline-flex;
-    align-items: center;
-    padding: 4px 8px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.14);
-    color: white;
-    font-size: 12px;
-    line-height: 1;
-}
-
-.tagEmpty {
-    font-size: 12px;
-    opacity: 0.75;
-}
-
-.completedProjectName {
-    margin-bottom: 8px;
-    font-weight: bold;
-}
-
-.completedProjectTags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-
-
-/* =========================
    Lists
 ========================= */
 
 #taskList,
 #subtaskList,
-#completedList {
+#completedJarList,
+#completedAllList {
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -333,6 +252,11 @@ body {
     align-items: center;
     gap: 8px;
 }
+
+
+/* =========================
+   Checkbox / Buttons
+========================= */
 
 .checkbox {
     flex-shrink: 0;
@@ -375,9 +299,19 @@ body {
     background: rgba(255, 255, 255, 0.06);
 }
 
-.doneText {
-    text-decoration: line-through;
-    opacity: 0.75;
+.renameButton {
+    flex-shrink: 0;
+    padding: 6px 8px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.12);
+    color: white;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.renameButton:hover {
+    background: rgba(255, 255, 255, 0.18);
 }
 
 .deleteButton {
@@ -404,8 +338,30 @@ body {
     background-position: 0 -32px;
 }
 
+.doneText {
+    text-decoration: line-through;
+    opacity: 0.75;
+}
+
 .highlighted {
     background: rgba(255, 255, 0, 0.2);
+}
+
+
+/* =========================
+   Completed
+========================= */
+
+#completedJarCount,
+#completedAllCount {
+    margin-bottom: 10px;
+    text-align: center;
+    opacity: 0.9;
+}
+
+.completedProjectName {
+    font-weight: bold;
+    word-break: break-word;
 }
 
 
@@ -421,11 +377,20 @@ body {
     margin-top: 12px;
 }
 
+.topBackRow {
+    margin-top: 0;
+    margin-bottom: 10px;
+}
+
+#createJarButton,
+#completedIdeasButton,
 #createTaskButton,
-#backButton,
+#subtasksBackButton,
 #randomTaskButton,
 #randomSubtaskButton,
-#completedBackButton {
+#completedJarBackButton,
+#completedAllBackButton,
+#jarExploreJarsButton {
     padding: 8px 14px;
     border: none;
     border-radius: 8px;
@@ -434,17 +399,16 @@ body {
     cursor: pointer;
 }
 
+#createJarButton:hover,
+#completedIdeasButton:hover,
 #createTaskButton:hover,
-#backButton:hover,
+#subtasksBackButton:hover,
 #randomTaskButton:hover,
 #randomSubtaskButton:hover,
-#completedBackButton:hover {
+#completedJarBackButton:hover,
+#completedAllBackButton:hover,
+#jarExploreJarsButton:hover {
     background: rgba(255, 255, 255, 0.18);
-}
-
-#backButton,
-#completedBackButton {
-    margin-bottom: 10px;
 }
 
 

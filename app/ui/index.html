@@ -10,35 +10,62 @@
     <div class="jarContainer">
         <button id="closeButton" type="button" aria-label="Close"></button>
 
-        <div id="jarControls">
-            <div id="jarTagFilterRow">
-                <label for="jarTagFilter" id="jarTagFilterLabel">Which Jar?</label>
-                <select id="jarTagFilter">
-                    <option value="">All Ideas</option>
-                </select>
+        <!-- MESSAGE POPUP -->
+        <div id="messagePopup" class="hidden">
+            <p id="messageText"></p>
+        </div>
+
+        <!-- =========================
+             JAR PICKER
+        ========================= -->
+        <div id="jarPickerPanel" class="hidden">
+            <div class="panelContent">
+                <h2 class="panelTitle">Choose a Jar</h2>
+
+                <div id="jarPickerList"></div>
+
+                <div class="panelActions">
+                    <button id="createJarButton" type="button">Create New Jar</button>
+                    <button id="completedIdeasButton" type="button">Completed Ideas</button>
+                </div>
             </div>
         </div>
 
-        <img id="pickButton" src="Sprites/jar.png" alt="Idea Jar" draggable="false">
+        <!-- =========================
+             JAR SCREEN
+        ========================= -->
+        <div id="jarPanel" class="hidden">
+            <div class="panelContent jarScreenContent">
 
-        <button id="createIdeaButton" type="button">Create Idea</button>
+                <!-- NEW: Explore button -->
+                <div class="panelActions topBackRow">
+                    <button id="jarExploreJarsButton" type="button">Explore Other Jars</button>
+                </div>
 
+                <h2 id="jarPanelTitle" class="panelTitle">Jar</h2>
+                <div id="jarMessage"></div>
+
+                <img id="pickButton" src="Sprites/jar.png" alt="Idea Jar" draggable="false">
+
+                <div class="panelActions">
+                    <button id="createIdeaButton" type="button">Create Idea</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- =========================
+             TASK SCREEN
+        ========================= -->
         <div id="taskPanel" class="hidden">
             <div class="panelContent">
                 <div class="tabs">
                     <button id="tasksTab" class="tabButton activeTab" type="button">Tasks</button>
                     <button id="completedTab" class="tabButton" type="button">Completed</button>
+                    <button id="createIdeaTopButton" class="tabButton" type="button">Create Idea</button>
+                    <button id="exploreJarsButton" class="tabButton" type="button">Explore Other Jars</button>
                 </div>
 
-                <h2 id="taskPanelTitle"></h2>
-
-                <div id="projectTagsSection" class="infoSection">
-                    <div class="sectionHeader">
-                        <span class="sectionTitle">Tags</span>
-                        <button id="editTagsButton" class="smallButton" type="button">Edit Tags</button>
-                    </div>
-                    <div id="projectTagsList" class="tagList"></div>
-                </div>
+                <h2 id="taskPanelTitle" class="panelTitle"></h2>
 
                 <div id="taskList"></div>
 
@@ -49,23 +76,17 @@
             </div>
         </div>
 
+        <!-- =========================
+             SUBTASK SCREEN
+        ========================= -->
         <div id="subtaskPanel" class="hidden">
             <div class="panelContent">
-                <div class="tabs">
-                    <button id="subtasksTasksTab" class="tabButton activeTab" type="button">Tasks</button>
-                    <button id="subtasksCompletedTab" class="tabButton" type="button">Completed</button>
+
+                <div class="panelActions topBackRow">
+                    <button id="subtasksBackButton" type="button">← Back</button>
                 </div>
 
-                <button id="backButton" type="button">← Back</button>
-
-                <h2 id="subtaskPanelTitle"></h2>
-
-                <div id="subtaskProjectTagsSection" class="infoSection">
-                    <div class="sectionHeader">
-                        <span class="sectionTitle">Tags</span>
-                    </div>
-                    <div id="subtaskProjectTagsList" class="tagList"></div>
-                </div>
+                <h2 id="subtaskPanelTitle" class="panelTitle"></h2>
 
                 <div id="subtaskList"></div>
 
@@ -75,26 +96,41 @@
             </div>
         </div>
 
-        <div id="completedPanel" class="hidden">
+        <!-- =========================
+             COMPLETED (CURRENT JAR)
+        ========================= -->
+        <div id="completedJarPanel" class="hidden">
             <div class="panelContent">
-                <div class="tabs">
-                    <button id="completedTasksTab" class="tabButton" type="button">Tasks</button>
-                    <button id="completedTabHeader" class="tabButton activeTab" type="button">Completed</button>
+
+                <div class="panelActions topBackRow">
+                    <button id="completedJarBackButton" type="button">← Back</button>
                 </div>
 
-                <button id="completedBackButton" type="button">← Back</button>
+                <h2 id="completedJarTitle" class="panelTitle">Completed</h2>
 
-                <h2 id="completedPanelTitle">Completed</h2>
-                <div id="completedCount"></div>
-                <div id="completedList"></div>
+                <div id="completedJarCount"></div>
+                <div id="completedJarList"></div>
             </div>
         </div>
 
-        <div id="messagePopup" class="hidden">
-            <p id="messageText"></p>
+        <!-- =========================
+             COMPLETED (ALL JARS)
+        ========================= -->
+        <div id="completedAllPanel" class="hidden">
+            <div class="panelContent">
+
+                <div class="panelActions topBackRow">
+                    <button id="completedAllBackButton" type="button">← Back</button>
+                </div>
+
+                <h2 class="panelTitle">Completed Ideas</h2>
+
+                <div id="completedAllCount"></div>
+                <div id="completedAllList"></div>
+            </div>
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <script src="./script.js"></script>
 </body>
 </html>
